@@ -6,7 +6,7 @@ Created on Sun Mar  7 22:07:39 2021
 @author: emilia
 """
 
-import numpy as np
+#import numpy as np
 import torch
 from torch import nn
 from torch import optim
