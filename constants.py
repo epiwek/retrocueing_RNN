@@ -22,7 +22,7 @@ PARAMS = {'n_stim':16,
           'n_colCh':17,
           'n_rec':200,
           'n_out':17}                   
-PARAMS['experiment_number'] = 2
+PARAMS['experiment_number'] = 1
 PARAMS['experiment'] = 'Buschman_var_delays'
 # PARAMS['target_type'] = 'class_label' # or 'Gaussian'
 PARAMS['target_type']='angle_val'
@@ -89,6 +89,22 @@ PARAMS['trial_timepoints']['delay2_end'] = PARAMS['trial_timings']['stim_dur']\
     +PARAMS['trial_timings']['delay1_dur']+PARAMS['trial_timings']['cue_dur']\
         +PARAMS['trial_timings']['delay2_dur']
 
+if PARAMS['experiment_number']==3:
+    
+    PARAMS['trial_timepoints']['delay3_start'] = \
+        PARAMS['trial_timings']['stim_dur']\
+        +PARAMS['trial_timings']['delay1_dur']\
+        +PARAMS['trial_timings']['cue_dur']\
+        +PARAMS['trial_timings']['delay2_dur']\
+        +PARAMS['trial_timings']['probe_dur']
+    
+    PARAMS['trial_timepoints']['delay3_end'] = \
+        PARAMS['trial_timings']['stim_dur']\
+        +PARAMS['trial_timings']['delay1_dur']\
+        +PARAMS['trial_timings']['cue_dur']\
+        +PARAMS['trial_timings']['delay2_dur']\
+        +PARAMS['trial_timings']['probe_dur']\
+        +PARAMS['trial_timings']['delay3_dur']
 
 PARAMS['test_delay_lengths'] = [7,10,4]
 
@@ -184,7 +200,7 @@ PARAMS['M'] = PARAMS['B'] * PARAMS['L']
 
 
 PLOT_PARAMS = {}
-PLOT_PARAMS['4_colours'] = sns.color_palette("husl",4)
+PLOT_PARAMS['4_colours'] = sns.color_palette("husl",PARAMS['B'])
 
 ## PATHS ##
 
