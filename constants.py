@@ -22,7 +22,7 @@ PARAMS = {'n_stim':16,
           'n_colCh':17,
           'n_rec':200,
           'n_out':17}                   
-PARAMS['experiment_number'] = 1
+PARAMS['experiment_number'] = 2
 PARAMS['experiment'] = 'Buschman_var_delays'
 # PARAMS['target_type'] = 'class_label' # or 'Gaussian'
 PARAMS['target_type']='angle_val'
