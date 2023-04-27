@@ -73,6 +73,7 @@ def add_jitter(data,jitter='auto'):
                     - np.mean(np.arange(0,n_dups*jitter,jitter))
     return x_jitter
 
+
 def plot_paired_data(x_data,y_data,ax,colours,jitter='auto',**kwargs):
     # determine x jitter
     x_jitter = np.zeros(y_data.shape)
@@ -137,9 +138,11 @@ def plot_geometry(ax,Z,pca,plot_colours,plot_outline = True,legend_on = True, **
     if legend_on:
         ax.legend()
 
+
 def plot_plane(ax,verts,fc='k',a=0.2):
     # plot a polygon with given vertices in 3D
     ax.add_collection3d(Poly3DCollection([verts],facecolor=fc,edgecolor=[],alpha=a))
+    
     
 def plot_subspace(ax,points,plane_vecs,fc='k',a=0.2):
     # plot the best-fitting plane as a quadrilateral with vertices being the projections of original points onto the plane 
