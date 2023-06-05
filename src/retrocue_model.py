@@ -51,163 +51,7 @@ def seed_torch(seed=1029):
     # torch.backends.cudnn.benchmark = False
     # torch.backends.cudnn.deterministic = True
 
-# seed_torch()
 
-# torch.manual_seed(100)
-#%%
-        
-# def define_model(params, device,model_class = 'RNN'):
-#     global model, RNN # outputs need to be global variables, otherwise will be unable to save model with pickle
-    
-#     class RNN(nn.Module):
-#         def __init__(self, params):
-#             super(RNN, self).__init__()
-#             # input
-#             self.n_rec = params['n_rec'] # number of recurrent neurons
-#             self.n_inp = params['n_inp']
-#             self.n_out = params['n_out']
-            
-#             if params['noise_type']=='hidden':
-#             # _____________________________________________________ # 
-#             # implementation for simulations with hidden noise:
-#             # (need to add noise after the Wrec@ht-1 step, but before the nonlinearity)
-#                 self.inp = nn.Linear(self.n_inp,self.n_rec)
-#                 self.inp.weight = nn.Parameter(self.inp.weight*params['init_scale']) # Xavier init
-#                 # self.inp.weight = nn.Parameter(torch.randn((self.n_rec,self.n_inp)) *\
-#                 #                                 params['init_scale'] / np.sqrt(self.n_inp)) # Gaussian init
-                
-#                 self.inp.bias = nn.Parameter(self.inp.bias*params['init_scale']) # Xavier init
-#                 #self.inp.bias = nn.Parameter(self.inp.bias*0) # set bias to 0
-#                 # self.inp.bias = nn.Parameter(torch.randn((self.n_rec,)) *\
-#                 #                                 params['init_scale'] / np.sqrt(self.n_inp)) # Gaussian init
-
-#                 # self.Wrec = nn.Parameter((torch.rand(self.n_rec, self.n_rec)*2-1)\
-#                 #                           * (params['init_scale']/ np.sqrt(self.n_rec)))  # recurrent weights - Xavier init
-#                 # self.Wrec = nn.Parameter(torch.randn(self.n_rec, self.n_rec)\
-#                 #                           * (params['init_scale']/ np.sqrt(self.n_rec)))  # recurrent weights - Gaussian init
-                
-#                 self.Wrec = nn.Parameter(torch.nn.init.orthogonal_(torch.empty((self.n_rec, self.n_rec))))
-#                 # Wrec = I + Σoff
-#                 #self.Wrec = torch.diag(torch.ones(self.n_rec)) + \
-#                 #    torch.abs(1-torch.diag(torch.ones(self.n_rec)))*\
-#                 #        (torch.randn(self.n_rec, self.n_rec) / np.sqrt(self.n_rec))
-#                 #self.Wrec = nn.Parameter(self.Wrec)
-#                 self.relu = nn.ReLU()
-#                 self.softmax = nn.Softmax(dim=-1)
-#                 # self.do = nn.Dropout()
-
-#             else:
-                
-                
-#                 # # _____________________________________________________ # 
-#                 # # implementation for simulations without hidden noise:
-                    
-#                 self.Wrec = nn.RNN(self.n_inp,self.n_rec, nonlinearity = 'relu')
-                
-#                 self.Wrec.bias_hh_l0 = nn.Parameter(self.Wrec.bias_hh_l0*params['init_scale'])
-#                 self.Wrec.bias_ih_l0 = nn.Parameter(self.Wrec.bias_ih_l0*params['init_scale'])
-#                 self.Wrec.weight_hh_l0 = nn.Parameter(self.Wrec.weight_hh_l0*params['init_scale'])
-#                 self.Wrec.weight_ih_l0 = nn.Parameter(self.Wrec.weight_ih_l0*params['init_scale'])
-            
-#             # output layer
-#             self.out = nn.Linear(self.n_rec, self.n_out) # output layer
-#             self.out.weight = nn.Parameter(self.out.weight*params['init_scale']) #Xavier init
-#             # self.out.weight = nn.Parameter(torch.randn((self.n_out,self.n_rec))\
-#             #                                *(params['init_scale']/ np.sqrt(self.n_rec))) #Gaussian init
-            
-#             self.out.bias = nn.Parameter(self.out.bias*params['init_scale']) #Xavier init
-#             # self.out.bias = nn.Parameter(self.out.bias*0) # set bias to 0
-#             #self.out.bias = nn.Parameter(torch.randn((self.n_out,))\
-#             #                               *(params['init_scale']/ np.sqrt(self.n_rec))) #Gaussian init
-           
-#         def step(self, input_ext,hidden,noise):
-#             if params['noise_type']=='hidden':
-#                 # print('hidden t-1')
-#                 # pdb.set_trace()
-#                 # print(hidden)
-#                 # print('hidden t')
-#                 hidden = self.relu(self.inp(input_ext.unsqueeze(0)) + hidden @ self.Wrec.T \
-#                     + noise)
-                
-#                 # print(hidden)
-#                 # hidden = self.relu(hidden)
-#                 # print('hidden t relu')
-#                 # print(hidden)
-
-                
-                
-#                 output = hidden.clone().detach()# not neededm but keep it so that other code doesn't break down
-#             else:
-#                 output, hidden = self.Wrec(input_ext.unsqueeze(0),hidden)
-            
-#             return output, hidden
-
-        
-#         def forward(self, inputs):
-#             """
-#             Run the RNN with input timecourses
-#             """
-#             if params['noise_type']=='input':
-#                 # Add noise to inputs
-#                 inputs = add_noise(inputs,params,device)
-                
-#                 # One line implementation - doesn't use self.step, but not possible
-#                 # to add hidden noise to each timestep inside the activation func
-#                 o, h_n = self.Wrec(inputs)
-                
-#             elif params['noise_type']=='hidden':
-#                 # Add noise to hidden units
-#                 seq_len = inputs.shape[0]
-#                 batch = inputs.shape[1]
-#                 # To add hidden noise, need to use the expanded implementation below:
-                
-#                 # Initialize network state
-#                 hidden = torch.zeros((1,inputs.size(1), self.n_rec),device = device) # 0s
-            
-#                 # Run the input through the network - across time
-#                 o = torch.empty((seq_len,batch,self.n_rec),device = device)
-#                 for i in range(seq_len):
-                    
-#                     if len(np.where(params['noise_timesteps']==i)[0])>0:
-#                         # timestep with added noise
-#                         if params['noise_distr'] == 'uniform':
-#                             noise = (torch.rand(hidden.size(),device = device)-0.5)*params['sigma']
-#                         elif params['noise_distr'] == 'normal':
-#                             # Add Gaussian noise to appropriate timesteps of the trial
-#                             noise = (torch.randn(hidden.size(),device = device))*params['sigma']
-                            
-#                     else:
-#                         # timestep without noise
-#                         noise = torch.zeros(hidden.size(),device = device)
-                        
-                        
-                    
-#                     if i == seq_len - 1:
-#                         # last time step of the sequence
-#                         o[i,:,:], h_n = self.step(inputs[i, :, :], hidden,noise)
-#                         # h_n = self.do(h_n)
-#                     else:
-#                         o[i,:,:], hidden = self.step(inputs[i, :, :], hidden,noise)
-#                         #pdb.set_trace()
-#                         # hidden = self.do(hidden)
-#                     # if np.logical_and(i>0,i<4):
-#                     #     print('hidden after update')
-#                     #     print(hidden)
-#                 # apply dropout
-                
-                
-#             else:
-#                 # No noise
-#                 o, h_n = self.Wrec(inputs)
-            
-#             # pass the recurrent activation from the last timestep through the decoder layer
-#             output = self.out(h_n)
-#             output = self.softmax(output)
-#             return output.squeeze(), o, h_n   
-        
-#     model = RNN(params)
-    
-#     return model, RNN
 class RNN(nn.Module):
     def __init__(self, params,device):
         super(RNN, self).__init__()
@@ -224,77 +68,53 @@ class RNN(nn.Module):
         torch.manual_seed(params['model_number'])
         
         # LAYERS
-        # note: cannot use the torch RNN class, because need to add noise after
-        # the Wrec@ht-1 step, but before the nonlinearity, and it does it all 
-        # in one step
-        
-        self.inp = nn.Linear(self.n_inp,self.n_rec)
-        self.inp.weight = nn.Parameter(self.inp.weight*params['init_scale']) # Xavier init
-        # self.inp.weight = nn.Parameter(torch.randn((self.n_rec,self.n_inp)) *\
-        #                                 params['init_scale'] / np.sqrt(self.n_inp)) # Gaussian init
-        
-        self.inp.bias = nn.Parameter(self.inp.bias*params['init_scale']) # Xavier init
-        #self.inp.bias = nn.Parameter(self.inp.bias*0) # set bias to 0
-        # self.inp.bias = nn.Parameter(torch.randn((self.n_rec,)) *\
-        #                                 params['init_scale'] / np.sqrt(self.n_inp)) # Gaussian init
+        # note: We need to add noise after the Wrec @ ht-1 step, but before the nonlinearity.
+        # So, we cannot use the torch RNN class, because it does it all in one step.
 
-        # self.Wrec = nn.Parameter((torch.rand(self.n_rec, self.n_rec)*2-1)\
-        #                           * (params['init_scale']/ np.sqrt(self.n_rec)))  # recurrent weights - Xavier init
-        # self.Wrec = nn.Parameter(torch.randn(self.n_rec, self.n_rec)\
-        #                           * (params['init_scale']/ np.sqrt(self.n_rec)))  # recurrent weights - Gaussian init
-        
-        self.Wrec = nn.Parameter(torch.nn.init.orthogonal_(torch.empty((self.n_rec, self.n_rec))))
-        # Wrec = I + Σoff
-        #self.Wrec = torch.diag(torch.ones(self.n_rec)) + \
-        #    torch.abs(1-torch.diag(torch.ones(self.n_rec)))*\
-        #        (torch.randn(self.n_rec, self.n_rec) / np.sqrt(self.n_rec))
-        #self.Wrec = nn.Parameter(self.Wrec)
+        # input layer
+        self.inp = nn.Linear(self.n_inp,self.n_rec)
+        self.inp.weight = nn.Parameter(self.inp.weight*params['init_scale'])  # Xavier init
+        self.inp.bias = nn.Parameter(self.inp.bias*params['init_scale'])  # Xavier init
+
+        # recurrent layer
+        self.Wrec = nn.Parameter(torch.nn.init.orthogonal_(torch.empty((self.n_rec, self.n_rec))))  # orthogonal init
         self.relu = nn.ReLU()
-        self.softmax = nn.Softmax(dim=-1)
         
         # output layer
         self.out = nn.Linear(self.n_rec, self.n_out) # output layer
-        self.out.weight = nn.Parameter(self.out.weight*params['init_scale']) #Xavier init
-        # self.out.weight = nn.Parameter(torch.randn((self.n_out,self.n_rec))\
-        #                                *(params['init_scale']/ np.sqrt(self.n_rec))) #Gaussian init
-        
-        self.out.bias = nn.Parameter(self.out.bias*params['init_scale']) #Xavier init
-        # self.out.bias = nn.Parameter(self.out.bias*0) # set bias to 0
-        #self.out.bias = nn.Parameter(torch.randn((self.n_out,))\
-        #                               *(params['init_scale']/ np.sqrt(self.n_rec))) #Gaussian init
-        
+        self.out.weight = nn.Parameter(self.out.weight*params['init_scale'])  # Xavier init
+        self.out.bias = nn.Parameter(self.out.bias*params['init_scale'])  # Xavier init
+        self.softmax = nn.Softmax(dim=-1)
        
     def step(self,input_ext,hidden,noise):
-        
         hidden = self.relu(self.inp(input_ext.unsqueeze(0)) + hidden @ self.Wrec.T \
             + noise)
         h = hidden.clone().detach()
-        # need to detach the hidden state to be able to save it into a matrix 
-        # in the forward method, otherwise it messes with the computational 
-        # graph
+        # We need to detach the hidden state to be able to save it into a matrix
+        # in the forward method, otherwise it messes with the computational graph.
         
         return h, hidden
 
     
-    def forward(self,inputs):
+    def forward(self, inputs):
         """
-        Run the RNN with input timecourse.
+        Run the RNN with the input time course.
         """
 
         # Add noise to hidden units
         seq_len = inputs.shape[0]
-        batch = inputs.shape[1]
+        batch_size = inputs.shape[1]
         # To add hidden noise, need to use the expanded implementation below:
         
         # Initialize network state
+        # hidden states from current time point
         hidden = torch.zeros((1,inputs.size(1), self.n_rec),device = self.device) # 0s
-    
-        h = torch.empty((seq_len,batch,self.n_rec),device = self.device)
         # hidden states from all timepoints
-        
+        h = torch.empty((seq_len, batch_size, self.n_rec), device = self.device)
+
         # Run the input through the network - across time
-        for i in range(seq_len):
-            if len(np.where(self.noise_timesteps==i)[0])>0:    
+        for timepoint in range(seq_len):
+            if len(np.where(self.noise_timesteps == timepoint)[0]) > 0:
                 # Add Gaussian noise to appropriate timesteps of the trial
                 noise = (torch.randn(hidden.size(),device = self.device))*self.noise_sigma
             else:
@@ -306,33 +126,15 @@ class RNN(nn.Module):
             #     o[i,:,:], h_n = self.step(inputs[i, :, :], hidden,noise)
             #     # h_n = self.do(h_n)
             # else:
-            h[i,:,:], hidden = self.step(inputs[i, :, :], hidden,noise)
+            h[timepoint,:,:], hidden = self.step(inputs[timepoint, :, :], hidden,noise)
                 
         # pass the recurrent activation from the last timestep through the decoder layer
         output = self.out(hidden)
         output = self.softmax(output)
-        return output.squeeze(), h, hidden   
-    
+        return output.squeeze(), h, hidden
 
-# def set_seed(seed,params,device):
-#     # torch.manual_seed(params['model_number'])
-#     torch.manual_seed(seed)
-#     model = RNN(params,device)
-#     shuffling_order = torch.randperm(params['stim_set_size'],dtype=torch.long).to(device)
-#     return model, shuffling_order
-    
-    
-# def test_seed(seed,params,device):
-#     m1,so1 = set_seed(seed,params,device)
-#     m2,so2 = set_seed(seed,params,device)
-    
-#     print('Input weights: {}'.format(torch.all(m1.inp.weight==m2.inp.weight)))
-#     print('Recurrent weights: {}'.format(torch.all(m1.Wrec==m2.Wrec)))
-#     print('Output weights: {}'.format(torch.all(m1.out.weight==m2.out.weight)))
-#     print('Shuffling order: {}'.format(torch.all(so1==so2)))
 
-    
-def train_model(params,data,device):
+def train_model(params, data, device):
     '''
     Train the RNN model and save it, along with the training details.
 
@@ -763,7 +565,6 @@ def load_model(path,params,device):
 
 def eval_model(model,test_data,params,save_path,trial_type='valid'):
     '''
-    
 
     Parameters
     ----------
@@ -1206,59 +1007,6 @@ def apply_conv_criterion(params,loss_vals):
     return criterion_reached
 
 
-# def apply_conv_criterion(params,loss_vals):
-#     '''
-#     Applies the convergence criteria, 
-
-#     Parameters
-#     ----------
-#     loss_vals : torch.tensor
-#         DESCRIPTION.
-#     params : dict
-#         Dictionary containing the convergence criterion parameters:
-#          - params['conv_criterion']['cond1'] is the min value for dLoss
-#          - params['conv_criterion']['cond1'] is the max value for loss_vals
-
-#     Returns
-#     -------
-#     criterion_reached : bool
-#         True if both cond1 and cond2 satisfied.
-
-#     '''
-    
-
-    
-#     # calculate the dLoss/dt
-#     dLoss,loss_clean = get_dLoss_dt(params,loss_vals)
-    
-#     # find ixs where dLoss satisfies cond1
-#     # ix = np.where(np.logical_and(dLoss<0,
-#     #                              dLoss>params['conv_criterion']['cond1']))[0]
-#     # # ix -= 1 # index scale for loss_vals
-#     cond1 = np.logical_and((dLoss.mean()>params['conv_criterion']['thr_dLoss']),
-#                            dLoss.mean()<=-params['conv_criterion']['thr_dLoss'])
-    
-#     # find ixs where loss_vals satisfy cond2
-#     cond2 = (loss_vals[-1]<params['conv_criterion']['thr_loss'])
-    
-#     # cond1cond2 = np.intersect1d(ix,ix2)
-#     # criterion_reached = (len(cond1cond2)!=0)
-#     criterion_reached = np.logical_and(cond1,cond2)
-    
-#     return criterion_reached
-   
-
-# def custom_MSE_loss(params,output,target):
-#     diff = helpers.circ_diff(params['phi'],target)
-#     # target
-#     loss = helpers.circ_mean((diff*output)**2)
-#     # take the absolute value - only interested in an unsigned distance, 
-#     # and circular mean will be in [-pi,pi], due to the wrapping of the squared 
-#     # terms to the same interval
-#     loss = loss.abs()
-#     return loss
-
-
 def custom_MSE_loss(params,output,target_scalar):
     '''
     Loss function for network training. The loss term is given by the mean 
@@ -1314,40 +1062,6 @@ def make_target_1hot(params,target_scalar):
     target_1hot = torch.zeros((len(params['phi']),))
     target_1hot[torch.where(params['phi']==target_scalar)[0]]=1
     return target_1hot
-# class custom_MSE_loss():
-#     def __init__(self):
-        
-#     pass
 
 
     
-# plt.figure()
-# for i in range(50,102):
-#     t = np.arange(49)+i
-#     plt.plot(t,dLoss_all[i-50,:])
-    
-# plt.figure()
-# for i in range(50,102):
-#     t = np.arange(50)+i
-#     plt.plot(t,loss_clean_all[i-50,:])
-# target = constants.TRAINING_DATA['targets'][0]
-# loss = torch.empty((17,))  
-# for i in range(17):
-#     output = torch.zeros((17,))
-#     output[i] = 1  
-#     loss[i]= custom_MSE_loss(constants.PARAMS,output,target)
-
-# from scipy.stats import vonmises
-
-# loss = torch.empty((17,))  
-# diff = helpers.circ_diff(constants.PARAMS['phi'],target)
-# kappas = (np.linspace(0.0001,17,17))
-# sm = nn.Softmax(dim=-1)
-
-# plt.figure()
-# alphas=np.linspace(.2,1,17)
-# for i in range(17):
-#     output = sm(torch.from_numpy(vonmises.pdf(diff,kappas[i])))
-#     loss[i]= custom_MSE_loss(constants.PARAMS,output,target)
-#     ix = np.argsort(diff)
-#     plt.plot(diff[ix],output[ix],'ko-',alpha=alphas[i])
