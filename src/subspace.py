@@ -1,33 +1,12 @@
-import pickle
-import os.path
-import torch
+# This script contains classes used to find the 3D subspace as well as the best-fitting planes
+# for a given dataset.
+
 import numpy as np
-import pandas as pd
-import statsmodels.api as sm
-from numpy.linalg import lstsq, inv
-from scipy.stats import zscore, mode, pearsonr, spearmanr, shapiro
-
+from numpy.linalg import lstsq
 from sklearn.decomposition import PCA
-from sklearn.manifold import MDS
-from scipy.spatial.distance import squareform, pdist
-from scipy.spatial import procrustes
-from scipy.linalg import orthogonal_procrustes
-from scipy.spatial import ConvexHull
-# import hypertools
-from scipy.stats import shapiro, ttest_1samp, wilcoxon
-
-import seaborn as sns
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from scipy.spatial import ConvexHull
 
-import src.helpers
 import src.vec_operations as vops
-
-import src.custom_plot as cplot
-import pdb
-
-from src.generate_data_vonMises import update_time_params
 
 
 class SinglePlaneSubspace:
@@ -45,15 +24,9 @@ class SinglePlaneSubspace:
         """
             Fit a plane to datapoints using PCA.
 
-            Parameters
-            ----------
-            data : numpy array (n_datapoints,n_dimensions)
-                Array with the coordinates of points to which the plane will be fitted. Each point corresponds to a row.
-
             Returns
             -------
-            fitted_plane : pca object
-                Object created by the sklearn.decomposition.PCA method.
+            fitted_plane : sklearn.decomposition.PCA object
                 fitted_plane.components_ gives the plane vectors
 
             """
@@ -69,24 +42,31 @@ class SinglePlaneSubspace:
         return self.fitted_plane
 
     def get_normal(self):
+        """
+        Get the plane normal.
+        :return:
+        """
         if self.fitted_plane is None:
             self.get_best_fit_plane()
 
         self.plane_normal = np.cross(self.plane_vec1, self.plane_vec2)
 
     def get_new_basis(self):
-        '''
+        """
         Get the basis defined by the plane-defining vectors and the plane normal.
         :return:
-        '''
+        """
         if self.plane_normal is None:
             self.get_normal()
 
         new_basis = np.stack((self.plane_vec1, self.plane_vec2, self.plane_normal), axis=0).T
-        # print('This might break - not sure of the dimensionality of plane_vec1 (might be 1d)')
         return new_basis
 
     def project_onto_plane(self):
+        """
+        Project the 3D datapoints onto the best fitting plane. Returns the 3D coordinates of the projections.
+        :return:
+        """
         if self.fitted_plane is None:
             self.get_best_fit_plane()
 
@@ -97,8 +77,9 @@ class SinglePlaneSubspace:
 
     def compress_to_2d(self):
         """
-        Compress the datapoints to 2D by projecting them onto the best fit plane. Note the returned coordinates are
-        in the basis defined by the plane-defining vectors and the plane normal.
+        Compress the datapoints to 2D by projecting them onto the best fit plane and discarding the z-coordinate.
+        Note the returned coordinates are expressed in the basis defined by the plane-defining vectors and the
+        plane normal.
         :return:
         """
         # project points onto the plane
@@ -140,6 +121,10 @@ class SinglePlaneSubspace:
         self.is_concave = n_vertices < 4
 
     def detect_bowtie(self):
+        """
+        Detect a bowtie geometry.
+        :return:
+        """
         # compress to 2D
         points_2d = self.compress_to_2d()
 
@@ -182,10 +167,13 @@ class SinglePlaneSubspace:
         self.check_is_concave()
 
 
-class Subspace:
-    def __init__(self, data, constants):
+class Geometry:
+    def __init__(self, data, constants, subspace_labels=None):
         self.data = data
         self.n_colours = constants.PARAMS['B']
+        if subspace_labels is not None:
+            self.subspace1_label = subspace_labels[0]
+            self.subspace2_label = subspace_labels[1]
         self.PVEs = None
         self.coords_3d = None
         self.plane1_coords_3d = None
@@ -203,12 +191,7 @@ class Subspace:
 
     def get_3d_coords(self):
         """
-            Run the first PCA with the data matrix to reduce dimensionality to 3.
-
-            :param data: data matrix (n_conditions,n_neurons)
-            :return:
-                pca: pca object
-                coords_3d: data coordinates in 3D space (n_conditions,3)
+        Run the first PCA with the data matrix to reduce data dimensionality from n_neurons to 3.
         """
 
         # Initialise PCA object
@@ -238,9 +221,9 @@ class Subspace:
 
     def pick_quadrilateral_sides(self):
         """
-            Pick the corresponding sides of the quadrilateral as the basis for planes 1 and 2.
-            :return: side_ixs
-            """
+        Pick the corresponding sides of the quadrilateral as the basis for planes 1 and 2.
+        :return: side_ixs
+        """
         # get best fit planes
         if self.plane1 is None or self.plane2 is None:
             # run second PCA to find best fit planes
@@ -281,7 +264,7 @@ class Subspace:
         points2 = self.plane2_coords_3d  # location 2
 
         plane_vecs_aligned = []
-        for points, plane in zip((points1, points2),(self.plane1, self.plane2)):
+        for points, plane in zip((points1, points2), (self.plane1, self.plane2)):
             # project datapoints onto the fitted plane
 
             plane_vecs = np.stack((plane.plane_vec1, plane.plane_vec2))
@@ -340,11 +323,11 @@ class Subspace:
 
             plane_vecs_aligned.append(np.stack((a, b)))
 
-        normal1_aligned = np.cross(plane_vecs_aligned[0][0,:], plane_vecs_aligned[0][1,:])
-        normal2_aligned = np.cross(plane_vecs_aligned[1][0,:], plane_vecs_aligned[1][1,:])
+        normal1_aligned = np.cross(plane_vecs_aligned[0][0, :], plane_vecs_aligned[0][1, :])
+        normal2_aligned = np.cross(plane_vecs_aligned[1][0, :], plane_vecs_aligned[1][1, :])
 
-        self.plane1_basis_corrected = np.concatenate((plane_vecs_aligned[0],normal1_aligned[None,:]),axis=0).T
-        self.plane2_basis_corrected = np.concatenate((plane_vecs_aligned[1],normal2_aligned[None,:]),axis=0).T
+        self.plane1_basis_corrected = np.concatenate((plane_vecs_aligned[0], normal1_aligned[None, :]), axis=0).T
+        self.plane2_basis_corrected = np.concatenate((plane_vecs_aligned[1], normal2_aligned[None, :]), axis=0).T
 
     def get_cos_plane_angle_theta(self):
         # align the plane-defining vectors with respect to the sides of the quadrilateral
@@ -364,7 +347,7 @@ class Subspace:
         _, normal1, normal2 = self.get_cos_plane_angle_theta()
         # define the sign of the angle
         # this is an arbitrary distinction, but necessary to do circular statistics
-        # at the group level. Arccos will always map angles to the [0,180] range,
+        # at the group level. Arc-cos will always map angles to the [0,180] range,
         # whereas we want them to span the full circle. This rectification
         # will also mean that the mean angle across group will never be 0.
         # Sign is determined based on the normal of plane 1 - if the z coordinate
@@ -436,7 +419,7 @@ class Subspace:
         if np.abs(np.dot(normal1, normal2).round(6)) == 1:
             # rot_angle = 0
             # rot_axis = []
-            R = np.eye(len(normal1))
+            R = np.eye(len(normal1))  # rotation matrix
         else:
             # calculate the rotation angle (i.e. angle between the two normals)
             rot_angle = np.arccos(np.dot(normal1, normal2))
@@ -444,12 +427,8 @@ class Subspace:
             if rot_angle > np.pi / 2:
                 rot_angle += np.pi
 
-            # DELETE: still to add here - sign of the angle
             # get the rotation axis
             rot_axis = np.cross(normal1, normal2) / np.linalg.norm(np.cross(normal1, normal2))
-
-            # rot_vec = rot_angle * rot_axis
-            # R = r.from_rotvec(rot_vec)
 
             # construct the rotation matrix
             R = vops.construct_rot_matrix(rot_axis, rot_angle)
@@ -474,7 +453,7 @@ class Subspace:
 
         plane1.plane_vec1 = self.plane1.plane_vec1
         plane1.plane_vec2 = self.plane1.plane_vec2
-        plane1.plane_normal = self.plane1_basis_corrected[:,-1]
+        plane1.plane_normal = self.plane1_basis_corrected[:, -1]
 
         plane2.plane_vec1 = self.plane1.plane_vec1
         plane2.plane_vec2 = self.plane1.plane_vec2
@@ -483,11 +462,7 @@ class Subspace:
         plane1_2d = plane1.compress_to_2d()
         plane2_2d = plane2.compress_to_2d()
 
-        points_coplanar = np.stack((plane1_2d,plane2_2d))
-
         # calculate the phase-alignment using procrustes analysis
-
-        # apply the procrustes analysis
         plane1_std, plane2_std, disparity, R, s = vops.procrustes(plane1_2d, plane2_2d)
 
         self.reflection = np.linalg.det(R) < 0
@@ -512,6 +487,28 @@ class Subspace:
         if cos_theta <= 0:
             self.psi_degrees = np.nan
         else:
-            self.psi_degrees = self.get_phase_alignment() # get_phase_alignment(self.coords_3d, normal1, normal2)
+            self.psi_degrees = self.get_phase_alignment()
 
         return self.psi_degrees
+
+    def get_geometry(self):
+        """Run the entire pipeline and get the geometry measures: plane angle theta and phase alignment angle psi."""
+        self.get_3d_coords()
+        self.get_best_fit_planes()
+        self.correct_plane_bases()
+        self.get_theta_degrees()
+        self.get_psi_degrees()
+
+
+class AllGeometries:
+    def __init__(self, data, constants):
+        self.data = data
+        self.constants = constants
+        self.cued_geometry = Geometry(self.data, self.constants)
+        self.uncued_geometry = Geometry(self.data, self.constants)
+        self.cued_uncued_geometry = Geometry(self.data, self.constants)
+
+    def get_cued_geometry(self):
+        self.cued_geometry.get_geometry()
+
+
