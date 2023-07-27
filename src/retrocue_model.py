@@ -85,8 +85,7 @@ class RNN(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
 
     def step(self, input_ext, hidden, noise):
-        hidden = self.relu(self.inp(input_ext.unsqueeze(0)) + hidden @ self.Wrec.T \
-                           + noise)
+        hidden = self.relu(self.inp(input_ext.unsqueeze(0)) + hidden @ self.Wrec.T + noise)
         h = hidden.clone().detach()
         # We need to detach the hidden state to be able to save it into a matrix
         # in the forward method, otherwise it messes with the computational graph.
@@ -125,14 +124,63 @@ class RNN(nn.Module):
             # else:
             h[timepoint, :, :], hidden = self.step(inputs[timepoint, :, :], hidden, noise)
 
-        # pass the recurrent activation from the last timestep through the decoder layer
+        # pass the recurrent activation from the last timestep through the decoder layer and apply softmax
         output = self.out(hidden)
         output = self.softmax(output)
         return output.squeeze(), h, hidden
 
 
+def sample_choices(outputs, params, policy='softmax'):
+    """
+    Convert the output layer activity (corresponding to the choice probabilities for all possible colour responses) into
+    trial-wise choices using a specified policy.
+
+    Parameters
+    ----------
+    outputs : array-like (batch_size, n output channels)
+        output layer activation values (corresponding to the choice probabilities) from the model of interest
+
+    params : dictionary
+
+    policy : str
+        'hardmax', or 'softmax' (default)
+
+    Returns
+    -------
+    choices: array-like (batch_size,)
+        chosen stimulus colour defined as an angle [rad] in circular colour space
+
+    """
+    # get tuning curve centres
+    phi = torch.linspace(-np.pi, np.pi, params['n_colCh'] + 1)[:-1]
+    n_trials = outputs.shape[0]
+
+    # sample choices for all trials
+    if policy == 'softmax':
+        # softmax policy - sample the choices proportionally to their respective probabilities
+        # need to do it in a for loop because np.random.choice() only accepts 1d arrays for parameter p
+        choices = torch.empty((n_trials,))
+        for i in range(n_trials):
+            # normalise the choice probabilities again
+            # this is to avoid the numerical precision error numpy throws when 'probabilities do not sum up to 1'
+            p_vec = outputs[i, :]
+            p_vec = torch.tensor(p_vec, dtype=torch.float64)
+            p_vec /= p_vec.sum()
+            # sample choices
+            choices[i] = torch.tensor(np.random.choice(phi, p=p_vec))
+    elif policy == 'hardmax':
+        # hardmax policy - pick the choice associated with the highest probability
+        ix = np.argsort(outputs, 1)[:, -1]
+        choices = torch.empty((n_trials,))
+        for i in range(n_trials):
+            choices[i] = phi[ix[i]]
+    else:
+        raise ValueError('Not a valid policy name. Please pick one of the following: softmax, hardmax')
+    return choices
+
+
 def train_model(params, data, device):
-    '''
+    """
     Train the RNN model and save it, along with the training details.
 
     Parameters
@@ -156,7 +204,7 @@ def train_model(params, data, device):
     track_training : dict
         DESCRIPTION.
 
-    '''
+    """
 
     # set seed for reproducibility
     torch.manual_seed(params['model_number'])
@@ -544,10 +592,15 @@ def load_model(path, params, device):
     '''
 
     if device.type == 'cuda':
-        model = torch.load(path + 'model' + str(params['model_number']))
+        model = RNN(params, device)
+        model.load_state_dict(torch.load(path + 'model' + str(params['model_number']) + '_statedict'))
     else:
-        model = torch.load(path + 'model' + str(params['model_number']),
-                           map_location=torch.device('cpu'))
+        # for some reason can no longer load models straight from file with:
+        # model = torch.load(path + 'model' + str(params['model_number']), map_location=torch.device('cpu'))
+        # replaced with:
+        model = RNN(params, device)
+        model.load_state_dict(torch.load(path + 'model' + str(params['model_number'])+'_statedict'))
+
     print('.... Loaded')
     return model
 
@@ -664,14 +717,9 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
     # % 1. Evaluate model on the test data after freezing the weights
     model.eval()
     with torch.no_grad():
-        if params['noise_type'] == 'hidden':
-            readout, hidden_all_timepoints, hidden_T = \
-                model(test_data['inputs'])
-            # hidden_T corresponds to the hidden layer activity on the last 
-            # timepoint only
-        else:
-            hidden_all_timepoints, hidden_T = model.Wrec(test_data['inputs'])
-            readout = model.out(hidden_T)
+        readout, hidden_all_timepoints, hidden_T = \
+            model(test_data['inputs'])
+        # hidden_T corresponds to the hidden layer activity on the last timepoint only
     print('.... evaluated')
 
     # 2.  Create the full (unaveraged) test dataset dictionary
@@ -693,7 +741,7 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
         else:
             save_data(eval_data, params, save_path + 'eval_data_uncued_model')
     else:
-        # save
+        #save
         save_data(eval_data, params, save_path + 'eval_data_model')
 
     # 3. Create pca_data: dataset binned by cued colour and averaged across uncued colours Data is sorted by the cued
@@ -758,11 +806,19 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
                     'cued_down_uncued_up': pca_data_cued_up_uncued_down}
 
     # 6. Create and save a dictionary with model outputs - for behavioural analysis.
-    model_outputs = {'data': readout.squeeze(), 'labels': {"loc": test_data['loc'],
-                                                           "c1": test_data['c1'],
-                                                           "c2": test_data['c2']}}
+    choices = sample_choices(readout.squeeze(), params)
+    model_outputs = {'output_activations': readout.squeeze(),
+                     'choices': choices,
+                     'labels': {"loc": test_data['loc'],
+                                "c1": test_data['c1'],
+                                "c2": test_data['c2'],
+                                "probed_colour": test_data['probed_colour'],
+                                "unprobed_colour": test_data['unprobed_colour']}}
+    if params['experiment_number'] == 3:
+        # add cued and probed labels
+        model_outputs['labels']['cued_loc'] = test_data['cued_loc']
+        model_outputs['labels']['probed_loc'] = test_data['probed_loc']
     save_data(model_outputs, params, save_path + 'model_outputs_model')
-
     print('.... and data saved')
 
     return eval_data, pca_data_all, model_outputs
