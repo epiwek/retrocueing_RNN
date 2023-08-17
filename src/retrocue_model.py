@@ -727,12 +727,12 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
     # Save the full test dataset dictionary
     if params['experiment_number'] == 3:
         if trial_type == 'valid':
-            save_data(eval_data, params, save_path + 'eval_data_model')
+            save_data(eval_data, save_path + 'eval_data_model', params['model_number'])
         else:
-            save_data(eval_data, params, save_path + 'eval_data_uncued_model')
+            save_data(eval_data, save_path + 'eval_data_uncued_model', params['model_number'])
     else:
         #save
-        save_data(eval_data, params, save_path + 'eval_data_model')
+        save_data(eval_data, save_path + 'eval_data_model', params['model_number'])
 
     # 3. Create pca_data: dataset binned by cued colour and averaged across uncued colours Data is sorted by the cued
     # colour (probed if experiment 3) automatically when created, so no need to resort, only bin.
@@ -746,13 +746,13 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
 
     # save
     if params['experiment_number'] == 3:
-        save_data(pca_data, params, save_path + 'pca_data_probed_model')
+        save_data(pca_data, save_path + 'pca_data_probed_model', params['model_number'])
         if trial_type == 'valid':
-            save_data(pca_data, params, save_path + 'pca_data_model')
+            save_data(pca_data, save_path + 'pca_data_model', params['model_number'])
         else:
-            save_data(pca_data, params, save_path + 'pca_data_uncued_model')
+            save_data(pca_data, save_path + 'pca_data_uncued_model', params['model_number'])
     else:
-        save_data(pca_data, params, save_path + 'pca_data_model')
+        save_data(pca_data, save_path + 'pca_data_model', params['model_number'])
 
     # 4. Create pca_uncued: like above, but averaged across cued colours and binned across uncued colours
     # sort and bin
@@ -765,15 +765,15 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
     pca_data_uncued = format_pca_data(pca_data_uncued, 'cued', trial_type, params)
     # save
     if params['experiment_number'] == 3:
-        save_data(pca_data_uncued, params, save_path + 'pca_data_unprobed_model')
+        save_data(pca_data_uncued, save_path + 'pca_data_unprobed_model', params['model_number'])
         if trial_type == 'valid':
-            save_data(pca_data_uncued, params, save_path + 'pca_data_uncued_model')
-            save_data(eval_data_uncued, params, save_path + 'eval_data_uncued_model')
+            save_data(pca_data_uncued, save_path + 'pca_data_uncued_model', params['model_number'])
+            save_data(eval_data_uncued, save_path + 'eval_data_uncued_model', params['model_number'])
         else:
-            save_data(pca_data_uncued, params, save_path + 'pca_data_model')
-            save_data(eval_data_uncued, params, save_path + 'eval_data_model')
+            save_data(pca_data_uncued, save_path + 'pca_data_model', params['model_number'])
+            save_data(eval_data_uncued, save_path + 'eval_data_model', params['model_number'])
     else:
-        save_data(pca_data_uncued, params, save_path + 'pca_data_uncued_model')
+        save_data(pca_data_uncued, save_path + 'pca_data_uncued_model', params['model_number'])
 
     # 5. Create similar dictionaries for the Cued/Uncued geometry. These will contain the cued and uncued-averaged
     # data from trials where the 'up' and 'down' locations were cued, respectively.
@@ -781,13 +781,13 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
                                                        pca_data_uncued['data'][:params['B'], :, :]))}
     # format the dictionary - add labels and delay-specific keywords
     pca_data_cued_up_uncued_down = format_pca_data(pca_data_cued_up_uncued_down, 'single_up', trial_type, params)
-    save_data(pca_data_cued_up_uncued_down, params, save_path + 'pca_data_cued_up_uncued_down_model')
+    save_data(pca_data_cued_up_uncued_down, save_path + 'pca_data_cued_up_uncued_down_model', params['model_number'])
 
     pca_data_cued_down_uncued_up = {'data': torch.cat((pca_data['data'][params['B']:, :, :],
                                                        pca_data_uncued['data'][params['B']:, :, :]))}
     # format the dictionary - add labels and delay-specific keywords
     pca_data_cued_down_uncued_up = format_pca_data(pca_data_cued_down_uncued_up, 'single_down', trial_type, params)
-    save_data(pca_data_cued_down_uncued_up, params, save_path + 'pca_data_cued_down_uncued_up_model')
+    save_data(pca_data_cued_down_uncued_up, save_path + 'pca_data_cued_down_uncued_up_model', params['model_number'])
 
     # collate all pca data into a single dict
     pca_data_all = {'cued': pca_data,
@@ -808,13 +808,13 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
         # add cued and probed labels
         model_outputs['labels']['cued_loc'] = test_data['cued_loc']
         model_outputs['labels']['probed_loc'] = test_data['probed_loc']
-    save_data(model_outputs, params, save_path + 'model_outputs_model')
+    save_data(model_outputs, save_path + 'model_outputs_model', params['model_number'])
     print('.... and data saved')
 
     return eval_data, pca_data_all, model_outputs
 
 
-def save_data(data, params, save_path):
+def save_data(data, save_path, model_number=None):
     """
     Saves specified data structures.
     
@@ -822,20 +822,20 @@ def save_data(data, params, save_path):
     ----------
     data : array-like or dictionary
     
-    params : dictionary 
-    
     save_path : str
+
+    model_number : Optional, integer. Default is None.
     
     Returns
     -------
     None
     """
 
-    if not params:
+    if model_number is None:
         # save data without specifying model number
-        f = open(save_path + '.pckl', 'wb')
+        f = open(f"{save_path}.pckl", 'wb')
     else:
-        f = open(save_path + str(params['model_number']) + '.pckl', 'wb')
+        f = open(f"{save_path}{model_number}.pckl", 'wb')
     pickle.dump(data, f)
     f.close()
 
