@@ -8,22 +8,12 @@ Created on Sun Mar  7 22:07:39 2021
 import random
 import numpy as np
 import torch
-from torch import nn
-from torch import optim
+from torch import nn, optim
 import pickle
-import math
 import os
 from scipy.ndimage import gaussian_filter1d
-from scipy.signal import argrelextrema
-# from pycircstat import mean as circ_mean
-# from pycircstat.descriptive import cdiff
-
-# import pdb
-# import custom_plot as cplot
-
 from src.generate_data_vonMises import change_cue_validity
 import src.helpers as helpers
-import pdb
 
 
 def seed_torch(seed=1029):
