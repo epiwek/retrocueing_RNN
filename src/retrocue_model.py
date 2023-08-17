@@ -809,6 +809,7 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
         model_outputs['labels']['cued_loc'] = test_data['cued_loc']
         model_outputs['labels']['probed_loc'] = test_data['probed_loc']
     save_data(model_outputs, save_path + 'model_outputs_model', params['model_number'])
+    save_data(choices, save_path + 'responses_model', params['model_number'])
     print('.... and data saved')
 
     return eval_data, pca_data_all, model_outputs
