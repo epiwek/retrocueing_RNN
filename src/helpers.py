@@ -57,6 +57,7 @@ def check_file_exists(path_to_file):
     return exists
 
 
+
 def sort_by_uncued(data_struct,params,key='data'):
     '''
     Sort trials by the uncued stimulus colour.
@@ -337,6 +338,7 @@ def wrap_angle(angle):
 # def wrap_angle_0360(angle):
 #     return (angle) % (2*torch.tensor(np.pi))
 
+
 def circ_mean(angles):
     '''
     Calculate the circular mean of a set of angles.
@@ -344,8 +346,7 @@ def circ_mean(angles):
     Parameters
     ----------
     angles : array
-        Angles sample array. If multidimensional, will be flattened before 
-        computing the mean.
+        Angles sample array. If multidimensional, will be flattened before computing the mean.
 
     Returns
     -------
@@ -353,9 +354,13 @@ def circ_mean(angles):
         Circular mean of the angles.
 
     '''
-    if len(angles.shape)>1:
+
+    if len(angles.shape) > 1:
+        # flatten
         angles = angles.view(-1)
+    # convert the angles into x- and y-coordinates on the unit circle, then take their cartesian means
     cart_mean = angle_to_vec(angles).mean(-1)
+    # convert back into angles
     circ_mean = vec_to_angle(cart_mean)
     return circ_mean
 
@@ -373,7 +378,7 @@ def angle_to_vec(angles):
     -------
     angles_vectors : array
     """
-    angles_vectors = torch.stack((torch.cos(angles),torch.sin(angles)))
+    angles_vectors = torch.stack((torch.cos(angles), torch.sin(angles)))
     return angles_vectors
 
 
@@ -392,7 +397,7 @@ def vec_to_angle(vec):
         Angle in radians, defined on the [-pi,pi] interval.
 
     '''
-    return torch.atan2(vec[1],vec[0])
+    return torch.atan2(vec[1], vec[0])
 
 
 def corrcl(circ_var,l_var):
@@ -437,3 +442,4 @@ def corrcl(circ_var,l_var):
     p_val = 1 - chi2.cdf(test_stat,df)
     
     return rcl, p_val
+

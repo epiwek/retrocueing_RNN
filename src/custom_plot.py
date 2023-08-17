@@ -317,3 +317,30 @@ def plot_all_error_data(constants, test_conditions, all_results):
                            sem=all_results[condition]['sem_errs'],
                            ax=ax,
                            c=colour)
+
+
+def plot_mixture_model_params_validity(mixture_param_data_dict):
+    """
+    Plot the mixture model parameters fit to choice data from models from Experiment 4. Each model was trained under a
+    given cue validity condition (0.5 and 0.75) evaluated on valid and invalid trials. Each mixture model parameter is
+    plotted as a separate figure. Data is plotted as parameter mean+-SEM, with trial type (valid, invalid) on x-axis and
+    condition (cue validity 0.5, 0.75) denoted by plot colour.
+
+    :param mixture_param_data_dict : A dictionary containing mixture parameter data.
+        It should have the following keys:
+        - 'model_nr' (array): An Array with model number for each observation.
+        - parameter-specific keys (e.g. 'K'), each containing a pandas dataframe with 'trial_type', 'condition' and
+            parameter-specific columns.
+    :type mixture_param_data_dict: dict
+
+
+    :return: None
+    """
+    # extract the names of the mixture parameters from the data dictionary
+    mixture_params = [key for key in mixture_param_data_dict.keys() if key != 'model_nr']
+    for param in mixture_params:
+        sns.catplot(x='trial_type', y=param, hue='condition', data=mixture_param_data_dict[param],
+                    kind="point", markers=["^", "o"], units=mixture_param_data_dict['model_nr'], dodge=True, ci=68,
+                    palette=sns.color_palette("Set2")[2:0:-1])
+
+        plt.xlabel('trial type')
