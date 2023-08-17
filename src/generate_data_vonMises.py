@@ -372,10 +372,8 @@ def generate_test_dataset(params, plot_trial=False):
     if plot_trial:
         sns.set_context("notebook", font_scale=1.5)
         sns.set_style("ticks")
-        if params['experiment_number'] >= 3:
-            cplot.plot_example_stimulus(test_data['inputs'].T,
-                                        cmap=sns.cubehelix_palette(start=.5, rot=-.75, as_cmap=True, reverse=True))
-        else:
+        if params['experiment_number'] == 3:
+            # variabl delays case
             params = update_time_params(params, params['test_delay_lengths'][0])
             cplot.plot_example_stimulus(test_data['trained']['inputs'].T,
                                         cmap=sns.cubehelix_palette(start=.5, rot=-.75, as_cmap=True, reverse=True))
@@ -385,16 +383,20 @@ def generate_test_dataset(params, plot_trial=False):
             fig = plt.gcf()
             fig.set_size_inches(3, 5)
             plt.tight_layout()
-            fig_path = params['FULL_PATH'] + 'figs/'
-            check_path(fig_path)
-            plt.savefig(fig_path + 'example_test_stimulus.png')
+        else:
+            cplot.plot_example_stimulus(test_data['inputs'].T,
+                                        cmap=sns.cubehelix_palette(start=.5, rot=-.75, as_cmap=True, reverse=True))
+
+        fig_path = params['FULL_PATH'] + 'figs/'
+        check_path(fig_path)
+        plt.savefig(fig_path + 'example_test_stimulus.png')
 
     return test_data
 
 
 def update_time_params(params, delay_length):
     '''
-    Updates the time parameters saves in the constants file. Used to make the 
+    Updates the time parameters saved in the constants file. Used to make the
     delay lengths in experiment 2 equal to those in experiment 1, as well as
     to generate test datasets with different trial lengths.
 
@@ -453,8 +455,8 @@ def generate_test_conditions():
     test_conditions = {}
     folder_names = {}
     for expt_n in range(1, 5):
-        if expt_n < 3:
-            # In Experiments 1 and 2, the networks are tested under conditions which differ in terms of the length of
+        if (expt_n == 1) or (expt_n == 3):
+            # In Experiments 1 and 3, the networks are tested under conditions which differ in terms of the length of
             # the delay intervals. They correspond to: (1) 'trained' - delay length experienced during training (7
             # cycles) (2) 'out-of-range' - delay length that was longer than the one (Expt 1)/ fell outside the range
             # ( Expt 2) used during training. (3) 'out-of-range-shorter' - as above, but shorter than the delay
@@ -464,8 +466,8 @@ def generate_test_conditions():
             folder_names[f"expt_{expt_n}"] = ['valid_trials/', 'valid_trials/out_range_tempGen/',
                                               'valid_trials/out_range_tempGen_shorter/',
                                               'valid_trials/in_range_tempGen/']
-        elif expt_n == 3:
-            # In Experiment 3, networks trained on each task variation (defined by the length of the second / post-cue
+        elif expt_n == 2:
+            # In Experiment 2, networks trained on each task variation (defined by the length of the second / post-cue
             # delay interval) are only evaluated on the conditions they experienced during training.
             for delay2_length in range(0, 8):
                 test_conditions[f"expt_{expt_n}_delay2_{delay2_length}cycles"] = ['trained']

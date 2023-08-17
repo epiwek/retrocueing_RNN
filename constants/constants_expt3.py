@@ -16,7 +16,9 @@ from src.helpers import check_path
 
 ## TASK AND MODEL PARAMETERS ##
 PARAMS = {'n_stim': 16, 'kappa_val': 5.0, 'add_fixation': False, 'n_colCh': 17, 'n_rec': 200, 'n_out': 17,
-          'experiment_number': 2, 'n_delays': 2, 'experiment': 'Buschman_var_delays', 'target_type': 'angle_val'}
+          'experiment_number': 3, 'n_delays': 2, 'experiment': 'Buschman_var_delays', 'target_type': 'angle_val'}
+PARAMS['expt_key'] = 'expt_3'
+
 # PARAMS['target_type'] = 'class_label' # or 'Gaussian'
 PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh']+1)[:-1]
 

@@ -26,6 +26,7 @@ PARAMS = {'n_stim':16,
 PARAMS['experiment_number'] = 3
 PARAMS['n_delays'] = 3
 PARAMS['experiment'] = 'validity_paradigm'
+PARAMS['expt_key'] = 'expt_4_cue_val1'
 PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'
 
 PARAMS['n_trial_types'] = (PARAMS['n_stim']**2)*2

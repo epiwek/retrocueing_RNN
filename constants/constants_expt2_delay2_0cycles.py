@@ -23,7 +23,8 @@ PARAMS = {'n_stim':16,
           'n_rec':200,
           'n_out':17}                   
 
-PARAMS['experiment_number'] = 4
+PARAMS['experiment_number'] = 2
+PARAMS['expt_key'] = 'expt_2_delay2_0cycles'
 PARAMS['n_delays'] = 2
 PARAMS['experiment'] = 'Buschman paradigm'
 PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'

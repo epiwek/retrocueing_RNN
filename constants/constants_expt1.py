@@ -24,6 +24,7 @@ PARAMS = {'n_stim':16,
           'n_out':17}                   
 
 PARAMS['experiment_number'] = 1
+PARAMS['expt_key'] = 'expt_1'
 PARAMS['n_delays'] = 2
 PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'
 PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh']+1)[:-1]
