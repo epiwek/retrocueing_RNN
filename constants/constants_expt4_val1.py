@@ -11,8 +11,8 @@ import itertools
 import torch
 import seaborn as sns
 from scipy.stats import norm
-from src.generate_data_vonMises import make_stimuli_vonMises
-from src.helpers import check_path
+from generate_data_vonMises import make_stimuli_vonMises
+from helpers import check_path
 
 ## TASK AND MODEL PARAMETERS ##
 
@@ -23,20 +23,21 @@ PARAMS = {'n_stim':16,
           'n_rec':200,
           'n_out':17}                   
 
-PARAMS['experiment_number'] = 1
-PARAMS['n_delays'] = 2
+PARAMS['experiment_number'] = 3
+PARAMS['n_delays'] = 3
+PARAMS['experiment'] = 'validity_paradigm'
 PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'
-PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh']+1)[:-1]
-
 
 PARAMS['n_trial_types'] = (PARAMS['n_stim']**2)*2
 PARAMS['trial_timings'] = {}
 PARAMS['trial_timings']['stim_dur']=1
-PARAMS['trial_timings']['delay1_dur'] = 7
+PARAMS['trial_timings']['delay1_dur'] = 5
 PARAMS['trial_timings']['cue_dur']= 1
-PARAMS['trial_timings']['delay2_dur'] = 7
-PARAMS['trial_timings']['probe_dur'] = 0
-PARAMS['trial_timings']['delay3_dur'] = 0
+PARAMS['trial_timings']['delay2_dur'] = 5
+PARAMS['trial_timings']['probe_dur'] = 1
+PARAMS['trial_timings']['delay3_dur'] = 5
+
+PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh']+1)[:-1]
 
 # variable delay params
 PARAMS['var_delays'] = False
@@ -89,12 +90,27 @@ PARAMS['trial_timepoints']['delay2_start'] = PARAMS['trial_timings']['stim_dur']
 PARAMS['trial_timepoints']['delay2_end'] = PARAMS['trial_timings']['stim_dur']\
     +PARAMS['trial_timings']['delay1_dur']+PARAMS['trial_timings']['cue_dur']\
         +PARAMS['trial_timings']['delay2_dur']
+        
+if PARAMS['experiment_number']==3:
+    
+    PARAMS['trial_timepoints']['delay3_start'] = \
+        PARAMS['trial_timings']['stim_dur']\
+        +PARAMS['trial_timings']['delay1_dur']\
+        +PARAMS['trial_timings']['cue_dur']\
+        +PARAMS['trial_timings']['delay2_dur']\
+        +PARAMS['trial_timings']['probe_dur']
+    
+    PARAMS['trial_timepoints']['delay3_end'] = \
+        PARAMS['trial_timings']['stim_dur']\
+        +PARAMS['trial_timings']['delay1_dur']\
+        +PARAMS['trial_timings']['cue_dur']\
+        +PARAMS['trial_timings']['delay2_dur']\
+        +PARAMS['trial_timings']['probe_dur']\
+        +PARAMS['trial_timings']['delay3_dur']
 
-
-PARAMS['test_delay_lengths'] = [7,10,4]
 
 # noise params
-PARAMS['sigma'] = 0.07 # scaling factor for noise (boundary if uniform, s.d. if normal)
+PARAMS['sigma'] = 0.0 # scaling factor for noise (boundary if uniform, s.d. if normal)
 PARAMS['noise_type'] = 'hidden' # hidden or input
 PARAMS['noise_distr'] = 'normal' # normal or uniform
 PARAMS['noise_period'] = 'all'
@@ -113,13 +129,17 @@ elif PARAMS['noise_period'] == 'probe_and_delays':
 elif PARAMS['noise_period'] == 'all':
     PARAMS['noise_timesteps'] = np.arange(PARAMS['seq_len'])
 elif PARAMS['noise_period'] == 'none':
-    PARAMS['noise_timesteps'] = 'none'
+    PARAMS['noise_timesteps'] = []
 else:
     ValueError('Invalid noise period.')
     
+
+
+PARAMS['sigma'] = np.sqrt(PARAMS['sigma']**2 / len(PARAMS['noise_timesteps']))
         
 # cue validity params
-PARAMS['add_probe'] = False
+
+PARAMS['add_probe'] = True
 PARAMS['cue_validity'] = 1 # proportion of trials where the retrocued and probed locations match
 
 if PARAMS['cue_validity'] == 1:
@@ -135,7 +155,7 @@ else:
 
 PARAMS['n_models'] = 30
 
-PARAMS['n_epochs']=1
+PARAMS['n_epochs']=2000
 PARAMS['learning_rate']=10**(-4)
 PARAMS['init_scale']=1
 # 'init_scale' - factor by which the weight init should be scaled - needed in 
@@ -155,16 +175,16 @@ PARAMS['conv_criterion']['trial_window'] = np.int(norm.ppf(1-0.00001,
                         scale=PARAMS['conv_criterion']['smooth_sd']).round())
 
 # number of epochs used in the 
-PARAMS['conv_criterion']['window'] = 5
-PARAMS['conv_criterion']['thr_slope'] = -5e-05 # threshold for the dLoss/dt value
-PARAMS['conv_criterion']['thr_loss'] = 0.0036 
-# threshold for the loss value - set to the level that corresponds to monkey performance
+PARAMS['conv_criterion']['window'] = 15
+PARAMS['conv_criterion']['thr_slope'] = -2e-05 # threshold for the dLoss/dt value
+PARAMS['conv_criterion']['thr_loss'] = 0.0036 # threshold for the loss value
 
 PARAMS['n_jobs'] = 10
+
 PARAMS['from_scratch'] = True  # train from scratch
 
-PARAMS['n_trial_instances'] = 1 # for training
-PARAMS['n_trial_instances_test'] = 100 # for test
+PARAMS['n_trial_instances'] = 1
+PARAMS['n_trial_instances_test'] = 100
 PARAMS['stim_set_size']= PARAMS['n_trial_types'] * PARAMS['n_trial_instances']
 
 
@@ -196,12 +216,13 @@ PLOT_PARAMS['4_colours'] = sns.color_palette("husl",4)
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
 PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia'+'/'
 
-
 PARAMS['COND_PATH'] = PARAMS['BASE_PATH'] +'data_vonMises/experiment_' \
         +str(PARAMS['experiment_number'])+'/'
+
+if PARAMS['experiment_number']==3:
+	PARAMS['COND_PATH'] += 'validity_' + str(PARAMS['cue_validity']) +'/5_cycles/'
 print(PARAMS['COND_PATH'])
 check_path(PARAMS['COND_PATH'])
-
 
 # full parameterisation
 PARAMS['FULL_PATH'] = PARAMS['COND_PATH'] \
@@ -209,7 +230,7 @@ PARAMS['FULL_PATH'] = PARAMS['COND_PATH'] \
             +'/kappa' + str(PARAMS['kappa_val'])\
             +'/nrec' + str(PARAMS['n_rec'])\
                 +'/lr' + str(PARAMS['learning_rate']) + '/'
-                
+
 PARAMS['FIG_PATH'] = PARAMS['FULL_PATH'] + 'figs/'
 check_path(PARAMS['FIG_PATH'])
 

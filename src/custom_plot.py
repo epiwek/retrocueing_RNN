@@ -9,9 +9,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-import vec_operations as vops
-import rep_geom
-import helpers
+import src.vec_operations as vops
+from scipy.stats import vonmises
+# import rep_geom
+import src.helpers as helpers
 
 import pdb
 
@@ -25,7 +26,8 @@ def plot_settings():
 
 #%% experimental set up
 
-def plot_example_stimulus(data,**kwargs):
+
+def plot_example_stimulus(data, **kwargs):
     # plt.figure()
     
     # if len(data.shape)<3:
@@ -39,43 +41,44 @@ def plot_example_stimulus(data,**kwargs):
     
     fig, ax = plt.subplots()
     
-    if len(data.shape)<3:
+    if len(data.shape) < 3:
         # plot a specific trial
-        cax = ax.imshow(data,**kwargs)
+        cax = ax.imshow(data, **kwargs)
     else:
-        # pick a random trial to plot
+        # pick a random trial to plot from the full array
         ix = np.random.randint(data.shape[1])
-        cax = ax.imshow(data[:,ix,:],**kwargs)
-    fig.colorbar(cax,ticks=[0,1])
-    return fig,ax, cax
+        cax = ax.imshow(data[:, ix, :], **kwargs)
+    fig.colorbar(cax, ticks=[0,1])
+    return fig, ax, cax
 
 #%% paired data
 
-def add_jitter(data,jitter='auto'):
+
+def add_jitter(data, jitter='auto'):
     # check that data is a vector
-    if len(data.shape)>1:
+    if len(data.shape) > 1:
         raise ValueError('Input data should be 1D')
     
     unique = np.unique(data)
     x_jitter = np.zeros(data.shape)
-    # check for duplicate vals
-    if len(unique) != len(data) :
+    # check for duplicate vals - if there are none, keep the jitter values as all 0s
+    if len(unique) != len(data):
         # there are duplicates
         for i in range(len(unique)):
             # save indices of duplicates
-            dups_ix = np.where(data==unique[i])[0]
+            dups_ix = np.where(data == unique[i])[0]
             n_dups = len(dups_ix)
-            if jitter=='auto':
-                x_jitter[dups_ix] = np.linspace(-.2,.2,n_dups)
+            if jitter == 'auto':
+                x_jitter[dups_ix] = np.linspace(-.2, .2, n_dups)
             else:
                 # custom jitter value
                 x_jitter[dups_ix] = \
-                    np.arange(0,n_dups*jitter,jitter) \
-                    - np.mean(np.arange(0,n_dups*jitter,jitter))
+                    np.arange(0, n_dups*jitter, jitter) \
+                    - np.mean(np.arange(0, n_dups*jitter, jitter))
     return x_jitter
 
 
-def plot_paired_data(x_data,y_data,ax,colours,jitter='auto',**kwargs):
+def plot_paired_data(x_data, y_data, ax, colours, jitter='auto', **kwargs):
     # determine x jitter
     x_jitter = np.zeros(y_data.shape)
     if len(y_data.shape) == 1:
@@ -84,19 +87,19 @@ def plot_paired_data(x_data,y_data,ax,colours,jitter='auto',**kwargs):
         x_data = np.expand_dims(x_data,0)
     
     for i in range(2):
-        x_jitter[:,i] = add_jitter(y_data[:,i],jitter=jitter)
+        x_jitter[:,i] = add_jitter(y_data[:, i], jitter=jitter)
     
     #plot
     # loop over samples (models)
     for i in range(y_data.shape[0]):
-        ax.plot(x_data[i,:]+x_jitter[i,:],y_data[i,:],'k-',**kwargs)
+        ax.plot(x_data[i, :] + x_jitter[i, :], y_data[i, :], 'k-', **kwargs)
         # loop over the pair
         for j in range(y_data.shape[1]):
-            ax.plot(x_data[i,j]+x_jitter[i,j],y_data[i,j],'o',
-                    color = colours[j],**kwargs)
+            ax.plot(x_data[i, j] + x_jitter[i, j], y_data[i, j], 'o', color=colours[j], **kwargs)
             
 #%% 3D data and planes
-def plot_geometry(ax,Z,pca,plot_colours,plot_outline = True,legend_on = True, **kwargs):
+
+def plot_geometry(ax, Z, pca, plot_colours, plot_outline = True, legend_on = True, **kwargs):
     """
     Plot 3D data for one or two subspaces.
     
@@ -199,6 +202,118 @@ def shadow_plot(ax,x,y, precalc = False, alpha = 0.3, **kwargs):
     H1 = ax.fill_between(x,y_mean+y_sem,y_mean-y_sem,
                     alpha = alpha, **kwargs)
     H2 = ax.plot(x,y_mean,**kwargs)
-    return H1,H2
+    return H1, H2
 
-    
+
+def plot_PVEs_3D(constants, PVEs_3D):
+    """
+    Plot the percent of variance explained (PVE) in the data by the 3 principal components (PC). Values for
+    individual models (for each timepoint examined) plotted as dots joined by black lines,  group-wise averages as
+    bars.
+    :param constants: :param PVEs_3D: :return:
+    """
+
+    # set plot colours and markers
+    pal = sns.color_palette("dark")
+    if constants.PARAMS['experiment_number'] == 4:
+        inds = [3, 0, -3]
+        markers = ['o', '^', 's']
+    else:
+        inds = [3, 0]
+        markers = ['o', '^']
+    cols = [pal[ix] for ix in inds]
+    ms = 10
+
+    # plot
+    plt.figure(figsize=(6.5, 5))
+    ax = plt.subplot(111)
+
+    for model in range(constants.PARAMS['n_models']):
+        # add datapoints for individual models
+        for i in range(len(inds)):
+            ax.plot(i, PVEs_3D[model, i, :].sum(), marker=markers[i],
+                    color=cols[i], alpha=0.2, markersize=ms)
+        ax.plot(range(len(inds)), PVEs_3D[model, :, :].sum(-1), 'k-', alpha=0.2)  # sum PC1-3
+
+
+    # add group-wise averages
+    ax.plot(range(len(inds)), PVEs_3D.sum(-1).mean(0), 'k-')
+    for i in range(len(inds)):
+        ax.plot(i, PVEs_3D[:, i, :].sum(-1).mean(), marker=markers[i],
+                color=cols[i], markersize=ms)
+
+    # add labels
+    plt.ylabel('PVE by first 3 PCs')
+    if constants.PARAMS['experiment_number'] == 4:
+        plt.xlim((-0.5, 2.5))
+        plt.xticks([0, 1, 2], ['pre-cue', 'post-cue', 'probe'])
+    else:
+        plt.xlim((-0.5, 1.5))
+        plt.xticks([0, 1], ['pre-cue', 'post-cue'])
+
+    # plt.plot(np.mean(np.sum(pves,0),0),'_-r')
+    # plt.plot(np.mean(np.sum(pves,0),0),marker=1,c='r')
+    # plt.plot(np.mean(np.sum(pves,0),0),marker=0,c='r')
+    plt.tight_layout()
+
+
+def plot_err_distr(binned_errors, bin_centres, b, fitted_params, sem=None, ax=None, c='k'):
+    pdf_x = np.linspace(-b, b, 100)  # x vals for the fitted von Mises pdf
+    pdf_y = vonmises.pdf(pdf_x,
+                         fitted_params['kappa'],
+                         fitted_params['mu'],
+                         fitted_params['scale'])
+    if ax is None:
+        # create a new figure
+        plt.figure()
+        ax = plt.subplot(111)
+
+    if sem is not None:
+        # add error bars for datapoints
+        ax.errorbar(bin_centres, binned_errors, yerr=sem, fmt='none', ecolor=c)
+    ax.plot(bin_centres, binned_errors, 'o', mec=c, mfc='w')
+    ax.plot(pdf_x, pdf_y, '-', c=c, lw=2, label='fit')
+    x_ticks = [-100, 0, 100] # to match the monkey figure
+    ax.set_xticks(np.radians(x_ticks))
+    ax.set_xticklabels(x_ticks)
+    ax.set_xlabel('angular error (degrees)')
+    ax.set_ylabel('density of trials')
+    sns.despine()
+    plt.show()
+
+
+def plot_all_error_data(constants, test_conditions, all_results):
+    """ High-level plotter for the error distributions. For experiments 1-3, plots the error distributions for each
+    test condition in a separate subplot. For experiment 4, plots the error distributions from valid and invalid
+    trials on one plot, as green and red, respectively."""
+
+    if constants.PARAMS['cue_validity'] == 1:
+        # experiments 1-3 and experiment 4, cue_validity = 1
+        # plot results as different panels
+        n_conditions = len(test_conditions)
+        fig, axes = plt.subplots(1, n_conditions, sharex='all', sharey='all')
+        fig.set_size_inches((12.8, 3.4))
+        for i, condition in enumerate(test_conditions):
+            plot_err_distr(all_results[condition]['mean_errs'],
+                           all_results[condition]['bin_centres'],
+                           all_results[condition]['bin_max'],
+                           all_results[condition]['fitted_params'],
+                           sem=all_results[condition]['sem_errs'],
+                           ax=axes[i])
+            plt.title(condition)
+        plt.tight_layout()
+    else:
+        # plot valid and invalid trials on one plot
+        plt.figure()
+        ax = plt.subplot(111)
+        # plot valid trials
+        conditions = ['valid_trials', 'invalid_trials']
+        plot_colours = ['g', 'r']
+        for condition, colour in zip(conditions, plot_colours):
+            plot_err_distr(all_results[condition]['mean_errs'],
+                           all_results[condition]['bin_centres'],
+                           all_results[condition]['bin_max'],
+                           all_results[condition]['fitted_params'],
+                           sem=all_results[condition]['sem_errs'],
+                           ax=ax,
+                           c=colour)

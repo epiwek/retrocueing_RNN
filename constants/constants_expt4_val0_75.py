@@ -5,36 +5,46 @@ Created on Fri Jan 29 18:04:08 2021
 
 @author: emilia
 """
-from generate_data_vonMisses import make_stimuli_vonMises
 import os
 import numpy as np
 import itertools
 import torch
+import seaborn as sns
+from scipy.stats import norm
+from generate_data_vonMises import make_stimuli_vonMises
+from helpers import check_path
 
 ## TASK AND MODEL PARAMETERS ##
 
 PARAMS = {'n_stim':16,
-          'kappa_val': 1.0,
-          'add_fixation':True,
+          'kappa_val': 5.0,
+          'add_fixation':False,
           'n_colCh':17,
           'n_rec':200,
           'n_out':17}                   
 
+PARAMS['experiment_number'] = 3
+PARAMS['n_delays'] = 3
+PARAMS['experiment'] = 'validity_paradigm'
+PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'
+
 PARAMS['n_trial_types'] = (PARAMS['n_stim']**2)*2
 PARAMS['trial_timings'] = {}
 PARAMS['trial_timings']['stim_dur']=1
-PARAMS['trial_timings']['delay1_dur'] = 8
+PARAMS['trial_timings']['delay1_dur'] = 5
 PARAMS['trial_timings']['cue_dur']= 1
-PARAMS['trial_timings']['delay2_dur'] = 8
-PARAMS['trial_timings']['resp_dur'] = 0
-PARAMS['trial_timings']['ITI_dur'] = 0
+PARAMS['trial_timings']['delay2_dur'] = 5
+PARAMS['trial_timings']['probe_dur'] = 1
+PARAMS['trial_timings']['delay3_dur'] = 5
+
+PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh']+1)[:-1]
 
 # variable delay params
-PARAMS['var_delays'] = True
+PARAMS['var_delays'] = False
 
 if PARAMS['var_delays']:
     
-    PARAMS['delay_lengths'] = [1,4,7,10]
+    PARAMS['delay_lengths'] = [2,5,6,8]
     PARAMS['default_length'] = 5
     PARAMS['which_delay'] = 'both' #first, second or both
     
@@ -80,20 +90,30 @@ PARAMS['trial_timepoints']['delay2_start'] = PARAMS['trial_timings']['stim_dur']
 PARAMS['trial_timepoints']['delay2_end'] = PARAMS['trial_timings']['stim_dur']\
     +PARAMS['trial_timings']['delay1_dur']+PARAMS['trial_timings']['cue_dur']\
         +PARAMS['trial_timings']['delay2_dur']
-
+        
+if PARAMS['experiment_number']==3:
+    
+    PARAMS['trial_timepoints']['delay3_start'] = \
+        PARAMS['trial_timings']['stim_dur']\
+        +PARAMS['trial_timings']['delay1_dur']\
+        +PARAMS['trial_timings']['cue_dur']\
+        +PARAMS['trial_timings']['delay2_dur']\
+        +PARAMS['trial_timings']['probe_dur']
+    
+    PARAMS['trial_timepoints']['delay3_end'] = \
+        PARAMS['trial_timings']['stim_dur']\
+        +PARAMS['trial_timings']['delay1_dur']\
+        +PARAMS['trial_timings']['cue_dur']\
+        +PARAMS['trial_timings']['delay2_dur']\
+        +PARAMS['trial_timings']['probe_dur']\
+        +PARAMS['trial_timings']['delay3_dur']
 
 
 # noise params
-PARAMS['epsilon'] = 0 # scaling factor for noise (boundary if uniform, s.d. if normal)
-
-PARAMS['multiple_sds'] = False
-PARAMS['epsilon_delays'] = .0625
-
-PARAMS['noise_type'] = 'none' # hidden or input
+PARAMS['sigma'] = 0.0 # scaling factor for noise (boundary if uniform, s.d. if normal)
+PARAMS['noise_type'] = 'hidden' # hidden or input
 PARAMS['noise_distr'] = 'normal' # normal or uniform
-
-
-PARAMS['noise_period'] = 'none'
+PARAMS['noise_period'] = 'all'
 
 
 
@@ -107,16 +127,20 @@ elif PARAMS['noise_period'] == 'probe_and_delays':
     PARAMS['noise_timesteps'] = np.concatenate((range(1,9),
                         range(10,sum(PARAMS['trial_timings'].values())-1),[int(PARAMS['seq_len']-1)]))
 elif PARAMS['noise_period'] == 'all':
-    PARAMS['noise_timesteps'] = 'all'
+    PARAMS['noise_timesteps'] = np.arange(PARAMS['seq_len'])
 elif PARAMS['noise_period'] == 'none':
-    PARAMS['noise_timesteps'] = 'none'
+    PARAMS['noise_timesteps'] = []
 else:
     ValueError('Invalid noise period.')
     
+
+
+PARAMS['sigma'] = np.sqrt(PARAMS['sigma']**2 / len(PARAMS['noise_timesteps']))
         
 # cue validity params
-PARAMS['add_probe'] = False
-PARAMS['cue_validity'] = 1 # proportion of trials where the retrocued and probed locations match
+
+PARAMS['add_probe'] = True
+PARAMS['cue_validity'] = .75 # proportion of trials where the retrocued and probed locations match
 
 if PARAMS['cue_validity'] == 1:
     PARAMS['condition'] = 'deterministic'
@@ -129,29 +153,51 @@ else:
 
 ## TRAINING PARAMETERS ##
 
-PARAMS['n_models'] = 10
+PARAMS['n_models'] = 30
 
 PARAMS['n_epochs']=2000
-PARAMS['learning_rate']=10**(-5)
+PARAMS['learning_rate']=10**(-4)
 PARAMS['init_scale']=1
 # 'init_scale' - factor by which the weight init should be scaled - needed in 
 # order to be able to train longer sequences without hidden noise
 
-PARAMS['loss_fn'] = 'MSE' # 'MSE' or 'CEL'
+PARAMS['loss_fn'] = 'MSE'#'CEL' # or 'MSE'
+PARAMS['l2_activity'] = False # add an L2 loss on the hidden activity
+PARAMS['Br'] = 5 * 10**(-4) # add an L2 loss on the hidden activity
 
-PARAMS['optim'] = 'RMSprop' #'SGDm'
-PARAMS['MSE_criterion'] = 0.1
-PARAMS['n_jobs'] = 4
+
+PARAMS['optim'] = 'RMSprop' #'Adam' #'RMSprop' #'SGDm'
+PARAMS['criterion_type'] = 'abs_loss' #'abs_loss' # or 'loss_der'
+PARAMS['MSE_criterion'] = 0.0005
+PARAMS['conv_criterion'] = {}
+PARAMS['conv_criterion']['smooth_sd'] = 3
+PARAMS['conv_criterion']['trial_window'] = np.int(norm.ppf(1-0.00001,
+                        scale=PARAMS['conv_criterion']['smooth_sd']).round())
+
+# number of epochs used in the 
+PARAMS['conv_criterion']['window'] = 15
+PARAMS['conv_criterion']['thr_slope'] = -2e-05 # threshold for the dLoss/dt value
+PARAMS['conv_criterion']['thr_loss'] = 0.0036 # threshold for the loss value
+
+PARAMS['n_jobs'] = 10
 
 PARAMS['from_scratch'] = True  # train from scratch
 
 PARAMS['n_trial_instances'] = 1
-PARAMS['batch_size']= PARAMS['n_trial_types'] * PARAMS['n_trial_instances']
+PARAMS['n_trial_instances_test'] = 100
+PARAMS['stim_set_size']= PARAMS['n_trial_types'] * PARAMS['n_trial_instances']
+
+
+PARAMS['batch_size'] = 1 # for mini-batch training
+PARAMS['n_batches'] = PARAMS['stim_set_size'] // PARAMS['batch_size']
 
 if PARAMS['var_delays']:
     # matrix with all trial-wise delay values
-    PARAMS['delay_mat'] = torch.cat([PARAMS['delay_combos']]*PARAMS['batch_size'])
-    PARAMS['batch_size'] *= PARAMS['n_delay_combos']
+    # PARAMS['delay_mat'] = torch.cat([PARAMS['delay_combos']]*PARAMS['batch_size'])
+    # PARAMS['batch_size'] *= PARAMS['n_delay_combos']
+    
+    PARAMS['delay_mat'] = torch.cat([PARAMS['delay_combos']]*PARAMS['stim_set_size'])
+    PARAMS['stim_set_size'] *= PARAMS['n_delay_combos']
     
 # make a base training dataset - no noise, trials ordered by the cued colour
 TRAINING_DATA = make_stimuli_vonMises(PARAMS,epoch='test')
@@ -163,22 +209,29 @@ PARAMS['L'] = 2
 PARAMS['M'] = PARAMS['B'] * PARAMS['L']
     
 
+PLOT_PARAMS = {}
+PLOT_PARAMS['4_colours'] = sns.color_palette("husl",4)
 ## PATHS ##
 
-PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
+# PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
+PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia'+'/'
 
-# main training condition, incl. noise type and period
-PARAMS['COND_PATH'] = PARAMS['BASE_PATH'] + 'data_vonMises/MSELoss/with_fixation_variable_delays_'\
-    +PARAMS['condition']+'_'+PARAMS['noise_period']+'_'+PARAMS['optim']+'/'\
-        +PARAMS['which_delay'] + '/'
-#PARAMS['COND_PATH'] = PARAMS['BASE_PATH'] + 'data_vonMises/MSELoss/with_fixation_13cycles_noise_h_g_'+\
-#    PARAMS['condition']+'_'+PARAMS['noise_period']+'_'+PARAMS['optim']+'/'
+PARAMS['COND_PATH'] = PARAMS['BASE_PATH'] +'data_vonMises/experiment_' \
+        +str(PARAMS['experiment_number'])+'/'
 
-
+if PARAMS['experiment_number']==3:
+	PARAMS['COND_PATH'] += 'validity_' + str(PARAMS['cue_validity']) +'/5_cycles/'
+print(PARAMS['COND_PATH'])
+check_path(PARAMS['COND_PATH'])
 
 # full parameterisation
 PARAMS['FULL_PATH'] = PARAMS['COND_PATH'] \
-        +'epsilon' + str(PARAMS['epsilon'])\
+        +'sigma' + str(PARAMS['sigma'])\
             +'/kappa' + str(PARAMS['kappa_val'])\
             +'/nrec' + str(PARAMS['n_rec'])\
                 +'/lr' + str(PARAMS['learning_rate']) + '/'
+
+PARAMS['FIG_PATH'] = PARAMS['FULL_PATH'] + 'figs/'
+check_path(PARAMS['FIG_PATH'])
+
+PARAMS['MATLAB_PATH'] = '/Users/emilia/OneDrive - Nexus365/MATLAB/rnn_retrocue_data/'

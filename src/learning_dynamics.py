@@ -1135,8 +1135,8 @@ def run_retro_weight_analysis(constants):
     
 #%% experiment 4
 
-def check_learning_speed_expt4(params):
-    if params['experiment_number'] != 4:
+def check_learning_speed_expt3(params):
+    if params['experiment_number'] != 3:
         return
     
     
