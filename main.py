@@ -103,7 +103,7 @@ def run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag):
         valid_path = eval_path + 'valid_trials/'
         check_path(valid_path)
 
-        # keep the nested if statements for improved legibility
+        # keep the nested if statements for better legibility
         if c.PARAMS['cue_validity'] < 1:
             # Experiment 4, 75% and 50% validity conditions
             # valid trials
@@ -200,23 +200,24 @@ def run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag):
                     # only valid trials with the trained delay length
                     _, _, _ = retnet.eval_model(model, test_data, c.PARAMS, valid_path)
 
+        retnet.export_behav_data_to_matlab(c.PARAMS)
+
     # %% analysis pipeline
     if analysis_flag:
         # valid trials
         print('To fix - remove / standardise the paths')
-        common_path = c.PARAMS['FULL_PATH'] + 'pca_data/'
+        common_path = c.PARAMS['DATA_PATH']
 
         # get all test conditions and their corresponding data folder names
         test_conditions, folder_names = dg.generate_test_conditions()
 
         # get full test folder paths
-        experiment_key = f"expt_{c.PARAMS['experiment_number']}"
-        test_paths = [common_path + f for f in folder_names[experiment_key]]
+        test_paths = [common_path + f for f in folder_names[c.PARAMS['expt_key']]]
 
         if c.PARAMS['experiment_number'] == 1:
             # Behaviour
             # test_paths = [valid_path, out_range_path, out_range_path_shorter, in_range_path]
-            behav.run_behav_analysis(c, test_conditions[experiment_key], test_paths)
+            behav.run_behav_analysis(c, test_conditions[c.PARAMS['expt_key']], test_paths)
 
             # Cued geometry
                 #  geometry

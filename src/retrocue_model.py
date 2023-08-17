@@ -12,8 +12,10 @@ from torch import nn, optim
 import pickle
 import os
 from scipy.ndimage import gaussian_filter1d
+from scipy.io import savemat
 from src.generate_data_vonMises import change_cue_validity
 import src.helpers as helpers
+from src.generate_data_vonMises import generate_test_conditions
 
 
 def seed_torch(seed=1029):
@@ -810,9 +812,45 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
         model_outputs['labels']['probed_loc'] = test_data['probed_loc']
     save_data(model_outputs, save_path + 'model_outputs_model', params['model_number'])
     save_data(choices, save_path + 'responses_model', params['model_number'])
+
     print('.... and data saved')
 
     return eval_data, pca_data_all, model_outputs
+
+
+def export_behav_data_to_matlab(params):
+    expt_key = params['expt_key']
+
+    # get all test conditions and paths
+    common_path = params['RAW_DATA_PATH']
+
+    test_conditions, folder_names = generate_test_conditions()
+    # get full test folder paths
+    test_paths = [common_path + f for f in folder_names[expt_key]]
+
+    # loop over all test conditions
+    for condition, path in zip(test_conditions[expt_key], test_paths):
+        # load model choices
+        choices = []
+        for model_number in np.arange(params['n_models']):
+            # load model choice data
+            f = open(f"{path}model_outputs_model{model_number}.pckl", 'rb')
+            model_outputs = pickle.load(f)
+            f.close()
+
+            choices.append(model_outputs['choices'])
+            probed_colour = model_outputs['labels']['probed_colour']
+            unprobed_colour = model_outputs['labels']['unprobed_colour']
+
+        choices = torch.stack(choices)
+
+        #% export to matlab
+        data_for_matlab = {'reported_colour': choices.numpy(),
+                           'probed_colour': probed_colour.numpy(),
+                           'unprobed_colour': unprobed_colour.numpy()}
+
+        matlab_file_path = f"{params['MATLAB_PATH']}{expt_key}_{condition}_mixmodel_data.mat"
+        savemat(matlab_file_path, data_for_matlab)
 
 
 def save_data(data, save_path, model_number=None):
