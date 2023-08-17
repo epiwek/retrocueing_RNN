@@ -233,6 +233,11 @@ PARAMS['FULL_PATH'] = PARAMS['COND_PATH'] \
                 +'/lr' + str(PARAMS['learning_rate']) + '/'
 
 PARAMS['FIG_PATH'] = PARAMS['FULL_PATH'] + 'figs/'
+
 check_path(PARAMS['FIG_PATH'])
 
 PARAMS['MATLAB_PATH'] = '/Users/emilia/OneDrive - Nexus365/MATLAB/rnn_retrocue_data/'
+PARAMS['RAW_DATA_PATH'] = PARAMS['FULL_PATH'] + 'pca_data/'
+PARAMS['RESULTS_PATH'] = PARAMS['FULL_PATH'] + 'pca_data/'
+
+
