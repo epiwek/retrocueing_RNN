@@ -444,8 +444,8 @@ def update_time_params(params, delay_length):
 def get_probed_colour(params, test_dataset):
     # get indices of trials where loc1 and loc2 were probed
     if params['experiment_number'] == 4:
-        loc1_ix = np.array(test_dataset['probed_loc'] == 0, dtype=bool)
-        loc2_ix = np.array(test_dataset['probed_loc'] == 1, dtype=bool)
+        loc1_ix = np.array(test_dataset['probed_loc'] == 1, dtype=bool)
+        loc2_ix = np.array(test_dataset['probed_loc'] == 0, dtype=bool)
     else:
         loc1_ix = np.array(test_dataset['loc'][0, :, :].squeeze(), dtype=bool)
         loc2_ix = np.array(test_dataset['loc'][1, :, :].squeeze(), dtype=bool)
