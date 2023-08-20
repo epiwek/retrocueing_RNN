@@ -11,8 +11,8 @@ import itertools
 import torch
 import seaborn as sns
 from scipy.stats import norm
-from generate_data_vonMises import make_stimuli_vonMises
-from helpers import check_path
+from src.generate_data_vonMises import make_stimuli_vonMises
+from src.helpers import check_path
 
 ## TASK AND MODEL PARAMETERS ##
 
@@ -26,7 +26,7 @@ PARAMS = {'n_stim':16,
 PARAMS['experiment_number'] = 2
 PARAMS['n_delays'] = 2
 PARAMS['experiment'] = 'Buschman paradigm'
-PARAMS['expt_key'] = 'expt_5_delay2_0cycles'
+PARAMS['expt_key'] = 'expt_2_delay2_5cycles'
 
 PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'
 
@@ -129,7 +129,7 @@ else:
 
 PARAMS['add_probe'] = False
 
-PARAMS['cue_validity'] = 1 # proportion of trials where the retrocued and probed locations match
+PARAMS['cue_validity'] = 1  # proportion of trials where the retrocued and probed locations match
 
 if PARAMS['cue_validity'] == 1:
     PARAMS['condition'] = 'deterministic'
@@ -197,9 +197,8 @@ PARAMS['B'] = 4
 PARAMS['L'] = 2
 PARAMS['M'] = PARAMS['B'] * PARAMS['L']
     
+PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4)}
 
-PLOT_PARAMS = {}
-PLOT_PARAMS['4_colours'] = sns.color_palette("husl",4)
 ## PATHS ##
 
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
@@ -208,10 +207,12 @@ PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia'+'/'
 
 PARAMS['COND_PATH'] = PARAMS['BASE_PATH'] +'data_vonMises/experiment_' \
         +str(PARAMS['experiment_number'])+'/'
-if PARAMS['experiment_number'] == 3:
-	PARAMS['COND_PATH'] += 'validity_' + str(PARAMS['cue_validity']) +'/'
-elif PARAMS['experiment_number'] == 4:
-	PARAMS['COND_PATH'] += 'delay2_' + str(PARAMS['trial_timings']['delay2_dur']) + 'cycles/'
+
+if PARAMS['experiment_number'] == 4:
+    PARAMS['COND_PATH'] += 'validity_' + str(PARAMS['cue_validity']) +'/5_cycles/'
+elif PARAMS['experiment_number'] == 2:
+    PARAMS['COND_PATH'] += 'delay2_' + str(PARAMS['trial_timings']['delay2_dur']) + 'cycles/'
+
 
 print(PARAMS['COND_PATH'])
 check_path(PARAMS['COND_PATH'])

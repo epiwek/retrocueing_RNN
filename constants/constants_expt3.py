@@ -17,7 +17,7 @@ from src.helpers import check_path
 ## TASK AND MODEL PARAMETERS ##
 PARAMS = {'n_stim': 16, 'kappa_val': 5.0, 'add_fixation': False, 'n_colCh': 17, 'n_rec': 200, 'n_out': 17,
           'experiment_number': 3, 'n_delays': 2, 'experiment': 'Buschman_var_delays', 'target_type': 'angle_val'}
-PARAMS['expt_key'] = 'expt_3'
+PARAMS['expt_key'] = f"expt_{PARAMS['experiment_number']}"
 
 # PARAMS['target_type'] = 'class_label' # or 'Gaussian'
 PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh']+1)[:-1]
@@ -174,21 +174,23 @@ PARAMS['n_inp'] = TRAINING_DATA['inputs'].shape[-1]
 PARAMS['B'] = 4
 PARAMS['L'] = 2
 PARAMS['M'] = PARAMS['B'] * PARAMS['L']
-    
 
-
-PLOT_PARAMS = {}
-PLOT_PARAMS['4_colours'] = sns.color_palette("husl",4)
+PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4)}
 
 ## PATHS ##
 
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
 PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia'+'/'
 
-
 # main training condition, incl. noise type and period
 PARAMS['COND_PATH'] = PARAMS['BASE_PATH'] + 'data_vonMises/experiment_' \
         +str(PARAMS['experiment_number'])+'/'
+
+if PARAMS['experiment_number'] == 4:
+    PARAMS['COND_PATH'] += 'validity_' + str(PARAMS['cue_validity']) +'/5_cycles/'
+elif PARAMS['experiment_number'] == 2:
+    PARAMS['COND_PATH'] += 'delay2_' + str(PARAMS['trial_timings']['delay2_dur']) + 'cycles/'
+
 check_path(PARAMS['COND_PATH'])
 print(PARAMS['COND_PATH'])
 

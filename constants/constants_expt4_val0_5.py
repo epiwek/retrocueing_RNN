@@ -11,8 +11,8 @@ import itertools
 import torch
 import seaborn as sns
 from scipy.stats import norm
-from generate_data_vonMises import make_stimuli_vonMises
-from helpers import check_path
+from src.generate_data_vonMises import make_stimuli_vonMises
+from src.helpers import check_path
 
 ## TASK AND MODEL PARAMETERS ##
 
@@ -23,10 +23,10 @@ PARAMS = {'n_stim':16,
           'n_rec':200,
           'n_out':17}                   
 
-PARAMS['experiment_number'] = 3
+PARAMS['experiment_number'] = 4
 PARAMS['n_delays'] = 3
 PARAMS['experiment'] = 'validity_paradigm'
-PARAMS['expt_key'] = 'expt_4_cue_val0.5'
+PARAMS['expt_key'] = 'expt_4_cue_val_0.5'
 PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'
 
 PARAMS['n_trial_types'] = (PARAMS['n_stim']**2)*2
@@ -92,7 +92,7 @@ PARAMS['trial_timepoints']['delay2_end'] = PARAMS['trial_timings']['stim_dur']\
     +PARAMS['trial_timings']['delay1_dur']+PARAMS['trial_timings']['cue_dur']\
         +PARAMS['trial_timings']['delay2_dur']
         
-if PARAMS['experiment_number']==3:
+if PARAMS['experiment_number'] == 4:
     
     PARAMS['trial_timepoints']['delay3_start'] = \
         PARAMS['trial_timings']['stim_dur']\
@@ -111,12 +111,10 @@ if PARAMS['experiment_number']==3:
 
 
 # noise params
-PARAMS['sigma'] = 0.0 # scaling factor for noise (boundary if uniform, s.d. if normal)
-PARAMS['noise_type'] = 'hidden' # hidden or input
-PARAMS['noise_distr'] = 'normal' # normal or uniform
+PARAMS['sigma'] = 0.0  # scaling factor for noise (boundary if uniform, s.d. if normal)
+PARAMS['noise_type'] = 'hidden'  # hidden or input
+PARAMS['noise_distr'] = 'normal'  # normal or uniform
 PARAMS['noise_period'] = 'all'
-
-
 
 if PARAMS['noise_period'] == 'probe':
     # trial timepoints to which the noise is applied
@@ -210,8 +208,8 @@ PARAMS['L'] = 2
 PARAMS['M'] = PARAMS['B'] * PARAMS['L']
     
 
-PLOT_PARAMS = {}
-PLOT_PARAMS['4_colours'] = sns.color_palette("husl",4)
+PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4)}
+
 ## PATHS ##
 
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
@@ -220,8 +218,10 @@ PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia'+'/'
 PARAMS['COND_PATH'] = PARAMS['BASE_PATH'] +'data_vonMises/experiment_' \
         +str(PARAMS['experiment_number'])+'/'
 
-if PARAMS['experiment_number']==3:
-	PARAMS['COND_PATH'] += 'validity_' + str(PARAMS['cue_validity']) +'/5_cycles/'
+if PARAMS['experiment_number'] == 4:
+    PARAMS['COND_PATH'] += 'validity_' + str(PARAMS['cue_validity']) +'/5_cycles/'
+elif PARAMS['experiment_number'] == 2:
+    PARAMS['COND_PATH'] += 'delay2_' + str(PARAMS['trial_timings']['delay2_dur']) + 'cycles/'
 print(PARAMS['COND_PATH'])
 check_path(PARAMS['COND_PATH'])
 

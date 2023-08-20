@@ -610,7 +610,7 @@ def add_delay_keywords(data_dict, params):
     data_dict['delay1'] = data_dict['data'][:, d1_ix, :]
     data_dict['delay2'] = data_dict['data'][:, d2_ix, :]
 
-    if params['experiment_number'] == 3:
+    if params['experiment_number'] == 4:
         d3_ix = params['trial_timepoints']['delay3_end'] - 1
         data_dict['delay3'] = data_dict['data'][:, d3_ix, :]
 
@@ -636,7 +636,7 @@ def get_pca_data_labels(averaged_across, trial_type, params):
         # location of the cued (and uncued) item
         labels['loc'] = np.ones((params['M'],), dtype=int)
 
-    if params['experiment_number'] == 3:
+    if params['experiment_number'] == 4:
         # create cued and probed colour labels
         if trial_type == 'valid':
             if averaged_across == 'single_up':
@@ -712,7 +712,6 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
         readout, hidden_all_timepoints, hidden_T = \
             model(test_data['inputs'])
         # hidden_T corresponds to the hidden layer activity on the last timepoint only
-    print('.... evaluated')
 
     # 2.  Create the full (unaveraged) test dataset dictionary
     eval_data = {"dimensions": ['trial', 'time', 'n_rec'],
@@ -721,19 +720,18 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
                      {"loc": test_data['loc'],
                       "c1": test_data['c1'],
                       "c2": test_data['c2']}}
-    if params['experiment_number'] == 3:
+    if params['experiment_number'] == 4:
         # add cued and probed labels
         eval_data['labels']['cued_loc'] = test_data['cued_loc']
         eval_data['labels']['probed_loc'] = test_data['probed_loc']
 
-    # Save the full test dataset dictionary
-    if params['experiment_number'] == 3:
+    # # Save the full test dataset dictionary
+    if params['experiment_number'] == 4:
         if trial_type == 'valid':
             save_data(eval_data, save_path + 'eval_data_model', params['model_number'])
         else:
             save_data(eval_data, save_path + 'eval_data_uncued_model', params['model_number'])
     else:
-        #save
         save_data(eval_data, save_path + 'eval_data_model', params['model_number'])
 
     # 3. Create pca_data: dataset binned by cued colour and averaged across uncued colours Data is sorted by the cued
@@ -747,7 +745,7 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
     pca_data = format_pca_data(pca_data, 'uncued', trial_type, params)
 
     # save
-    if params['experiment_number'] == 3:
+    if params['experiment_number'] == 4:
         save_data(pca_data, save_path + 'pca_data_probed_model', params['model_number'])
         if trial_type == 'valid':
             save_data(pca_data, save_path + 'pca_data_model', params['model_number'])
@@ -766,7 +764,7 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
     # format the dictionary - add labels and delay-specific keywords
     pca_data_uncued = format_pca_data(pca_data_uncued, 'cued', trial_type, params)
     # save
-    if params['experiment_number'] == 3:
+    if params['experiment_number'] == 4:
         save_data(pca_data_uncued, save_path + 'pca_data_unprobed_model', params['model_number'])
         if trial_type == 'valid':
             save_data(pca_data_uncued, save_path + 'pca_data_uncued_model', params['model_number'])
@@ -806,14 +804,13 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
                                 "c2": test_data['c2'],
                                 "probed_colour": test_data['probed_colour'],
                                 "unprobed_colour": test_data['unprobed_colour']}}
-    if params['experiment_number'] == 3:
+    if params['experiment_number'] == 4:
         # add cued and probed labels
         model_outputs['labels']['cued_loc'] = test_data['cued_loc']
-        model_outputs['labels']['probed_loc'] = test_data['probed_loc']
     save_data(model_outputs, save_path + 'model_outputs_model', params['model_number'])
     save_data(choices, save_path + 'responses_model', params['model_number'])
 
-    print('.... and data saved')
+    print('.... evaluated and data saved')
 
     return eval_data, pca_data_all, model_outputs
 
@@ -834,7 +831,7 @@ def export_behav_data_to_matlab(params):
         choices = []
         for model_number in np.arange(params['n_models']):
             # load model choice data
-            f = open(f"{path}model_outputs_model{model_number}.pckl", 'rb')
+            f = open(f"{path}/model_outputs_model{model_number}.pckl", 'rb')
             model_outputs = pickle.load(f)
             f.close()
 

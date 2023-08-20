@@ -34,15 +34,14 @@ sns.set_context("notebook", font_scale=1.5)
 sns.set_style("ticks")
 
 # import constants - pick experiment
-import constants.constants_expt1 as c
+# import constants.constants_expt1 as c
 
 # %% pick experiment, set up flags, paths and device
 
 
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')  # train on CPU to ensure deterministic behaviour
 
-save_path = c.PARAMS['FULL_PATH']
+# save_path = c.PARAMS['FULL_PATH']
 
 
 train_flag = False
@@ -52,12 +51,16 @@ analysis_flag = False
 
 
 def run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag):
+    device = torch.device('cpu')  # train on CPU to ensure deterministic behaviour
+
     # %% train models
     if train_flag:
         start_time = time.time()
         # copy the configuration file to data the destination folder
         shutil.copy2(c.PARAMS['BASE_PATH'] + 'constants.py',
                      c.PARAMS['FULL_PATH'] + 'constants.py')
+
+        save_path = c.PARAMS['FULL_PATH']
 
         def train_and_save(m):
             c.PARAMS['model_number'] = m
@@ -120,8 +123,8 @@ def run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag):
                                                            test_data['invalid_trial_ixs'])
             retnet.save_data(test_data_invalid_trials, invalid_path + 'test_dataset')
         else:
-            if c.PARAMS['experiment_number'] < 3:
-                # Experiments 1 and 2
+            if c.PARAMS['experiment_number'] == 1 or c.PARAMS['experiment_number'] == 3:
+                # Experiments 1 and 3
                 # trained delay
                 retnet.save_data(test_data['trained'], valid_path + 'test_dataset')
 
@@ -140,7 +143,7 @@ def run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag):
                 check_path(in_range_path)
                 retnet.save_data(test_data['in-range'], in_range_path + 'test_dataset')
             else:
-                # Expt 4 with cue_validity = 1, Expt 3
+                # Expt 4 with cue_validity = 1, Expt 2
                 retnet.save_data(test_data, valid_path + 'test_dataset')
 
         # % evaluate models on test dataset
@@ -166,7 +169,7 @@ def run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag):
                                             trial_type='invalid')
 
             else:
-                if c.PARAMS['experiment_number'] < 3:
+                if c.PARAMS['experiment_number'] == 1 or c.PARAMS['experiment_number'] == 3:
                     # test on the/one of the delay lengths used in training
                     c.PARAMS = dg.update_time_params(c.PARAMS,
                                                      c.PARAMS['test_delay_lengths'][0])
@@ -196,7 +199,7 @@ def run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag):
                                                 test_data['in-range']['params'],
                                                 in_range_path)
                 else:
-                    # expt 3 with cue_validity = 1, expt 4
+                    # expt 4 with cue_validity = 1, expt 2
                     # only valid trials with the trained delay length
                     _, _, _ = retnet.eval_model(model, test_data, c.PARAMS, valid_path)
 
@@ -206,7 +209,7 @@ def run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag):
     if analysis_flag:
         # valid trials
         print('To fix - remove / standardise the paths')
-        common_path = c.PARAMS['DATA_PATH']
+        common_path = c.PARAMS['RAW_DATA_PATH']
 
         # get all test conditions and their corresponding data folder names
         test_conditions, folder_names = dg.generate_test_conditions()
@@ -247,3 +250,6 @@ def run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag):
 
         # if c.PARAMS['experiment_number']==2:
         #     cmm.run_maintenance_mechanism_analysis()
+
+#%% run the experiment
+# run_experiment(c, parallelise_flag, train_flag, eval_flag, analysis_flag)

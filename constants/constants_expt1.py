@@ -24,7 +24,7 @@ PARAMS = {'n_stim':16,
           'n_out':17}                   
 
 PARAMS['experiment_number'] = 1
-PARAMS['expt_key'] = 'expt_1'
+PARAMS['expt_key'] = f"expt_{PARAMS['experiment_number']}"
 PARAMS['n_delays'] = 2
 PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'
 PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh']+1)[:-1]
@@ -190,8 +190,8 @@ PARAMS['L'] = 2
 PARAMS['M'] = PARAMS['B'] * PARAMS['L']
     
 
-PLOT_PARAMS = {}
-PLOT_PARAMS['4_colours'] = sns.color_palette("husl",4)
+PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4)}
+
 ## PATHS ##
 
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
@@ -200,6 +200,12 @@ PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia'+'/'
 
 PARAMS['COND_PATH'] = PARAMS['BASE_PATH'] +'data_vonMises/experiment_' \
         +str(PARAMS['experiment_number'])+'/'
+
+if PARAMS['experiment_number'] == 4:
+    PARAMS['COND_PATH'] += 'validity_' + str(PARAMS['cue_validity']) +'/5_cycles/'
+elif PARAMS['experiment_number'] == 2:
+    PARAMS['COND_PATH'] += 'delay2_' + str(PARAMS['trial_timings']['delay2_dur']) + 'cycles/'
+
 print(PARAMS['COND_PATH'])
 check_path(PARAMS['COND_PATH'])
 

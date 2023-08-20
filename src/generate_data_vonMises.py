@@ -201,8 +201,11 @@ def make_stimuli_vonMises(params, epoch='train'):
                  'example_processed_colours': example_cp,
                  'output_tuning_centres': phi}
     if np.logical_and(params['experiment_number'] == 4, params['cue_validity'] == 1):
-        data_dict['cued_loc'] = loc
-        data_dict['probed_loc'] = loc
+        # add the fields for expt 4, cue validity = 1 only
+        # analogous field for the other cue validity conditions is added for the data subset dictionaries
+        # (i.e., for valid and invalid trials) in subset_of_trials below
+        data_dict['cued_loc'] = loc[0, :].squeeze()
+    data_dict['probed_loc'] = loc[0, :].squeeze()
     data_dict['probed_colour'], data_dict['unprobed_colour'] = get_probed_colour(params, data_dict)
 
     return data_dict
@@ -289,17 +292,19 @@ def subset_of_trials(params, data_dict, trial_ixs):
     """
 
     data_subset_dict = {}
-    data_subset_dict['inputs'] = data_dict['inputs'][:, trial_ixs, :]
-    data_subset_dict['targets'] = data_dict['targets'][trial_ixs]
-    data_subset_dict['c1'] = data_dict['c1'][trial_ixs]
-    data_subset_dict['c2'] = data_dict['c2'][trial_ixs]
-    data_subset_dict['loc'] = data_dict['loc'][:, trial_ixs, :]
+    for key in ['inputs', 'loc']:
+        data_subset_dict[key] = data_dict[key][:, trial_ixs, :]
+
+    for key in ['targets', 'c1', 'c2']:
+        data_subset_dict[key] = data_dict[key][trial_ixs]
+
     if params['experiment_number'] == 4:
         # add cued location dictionary entry
         cue_ix = params['trial_timepoints']['delay1_end']
         probe_ix = params['trial_timepoints']['delay2_end']
         data_subset_dict['cued_loc'] = data_dict['inputs'][cue_ix, trial_ixs, 0]
         data_subset_dict['probed_loc'] = data_dict['inputs'][probe_ix, trial_ixs, 0]
+
     data_subset_dict['probed_colour'], data_subset_dict['unprobed_colour'] = get_probed_colour(params, data_subset_dict)
 
     return data_subset_dict
@@ -328,8 +333,8 @@ def generate_test_dataset(params, plot_trial=False):
                               params['n_trial_instances_test']
     test_data = make_stimuli_vonMises(params, epoch='test')
 
-    if params['condition'] != 'deterministic':
-        # testing dataset for probabilistic/neutral condition
+    if params['cue_validity'] < 1:
+        # testing dataset for probabilistic cues
 
         # set the indices of invalid trials
         test_data['inputs'], invalid_trial_ixs = \
@@ -339,8 +344,8 @@ def generate_test_dataset(params, plot_trial=False):
                                        invalid_trial_ixs)
         test_data['valid_trial_ixs'] = valid_trial_ixs
 
-    if params['experiment_number'] < 3:
-        # testing datasets for experiment 2
+    if params['experiment_number'] == 1 or params['experiment_number'] == 3:
+        # testing datasets for experiments 1 and 3
         # trained delay length, same as for expt  1
         params = update_time_params(params, params['test_delay_lengths'][0])
         test_data = make_stimuli_vonMises(params, epoch='test')
@@ -442,8 +447,8 @@ def get_probed_colour(params, test_dataset):
         loc1_ix = np.array(test_dataset['probed_loc'] == 0, dtype=bool)
         loc2_ix = np.array(test_dataset['probed_loc'] == 1, dtype=bool)
     else:
-        loc1_ix = np.array(test_dataset['loc'][0, :, :].squeeze(),dtype=bool)
-        loc2_ix = np.array(test_dataset['loc'][1, :, :].squeeze(),dtype=bool)
+        loc1_ix = np.array(test_dataset['loc'][0, :, :].squeeze(), dtype=bool)
+        loc2_ix = np.array(test_dataset['loc'][1, :, :].squeeze(), dtype=bool)
 
     # get probed colour for each trial
     probed_colour = torch.cat((test_dataset['c1'][loc1_ix], test_dataset['c2'][loc2_ix]))
