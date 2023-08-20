@@ -476,16 +476,16 @@ def generate_test_conditions():
             # delay interval) are only evaluated on the conditions they experienced during training.
             for delay2_length in range(0, 8):
                 test_conditions[f"expt_{expt_n}_delay2_{delay2_length}cycles"] = ['trained']
-                folder_names[f"expt_{expt_n}_delay2_{delay2_length}cycles"] = ['valid_trials']
+                folder_names[f"expt_{expt_n}_delay2_{delay2_length}cycles"] = ['valid_trials/']
         elif expt_n == 4:
             # In Experiment 4, networks trained under probabilistic conditions (cue validity equal to 0.5 and 0.75)
             # are tested on valid and invalid trials, whilst networks trained under deterministic conditions (cue
             # validity equal to 1) are tested on valid trials.
             for cue_val in [.5, .75]:
                 test_conditions[f"expt_{expt_n}_cue_val_{cue_val}"] = ['valid_trials', 'invalid_trials']
-                folder_names[f"expt_{expt_n}_cue_val_{cue_val}"] = ['valid_trials', 'invalid_trials']
+                folder_names[f"expt_{expt_n}_cue_val_{cue_val}"] = ['valid_trials/', 'invalid_trials/']
             # cue val = 1
             test_conditions[f"expt_{expt_n}_cue_val_{1}"] = ['valid_trials']
-            folder_names[f"expt_{expt_n}_cue_val_{1}"] = ['valid_trials']
+            folder_names[f"expt_{expt_n}_cue_val_{1}"] = ['valid_trials/']
 
     return test_conditions, folder_names
