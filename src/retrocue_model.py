@@ -732,6 +732,7 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
         else:
             save_data(eval_data, save_path + 'eval_data_uncued_model', params['model_number'])
     else:
+        # save
         save_data(eval_data, save_path + 'eval_data_model', params['model_number'])
 
     # 3. Create pca_data: dataset binned by cued colour and averaged across uncued colours Data is sorted by the cued

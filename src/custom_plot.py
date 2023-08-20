@@ -257,7 +257,7 @@ def plot_PVEs_3D(constants, PVEs_3D):
     plt.tight_layout()
 
 
-def plot_err_distr(binned_errors, bin_centres, b, fitted_params, sem=None, ax=None, c='k'):
+def plot_err_distr(binned_errors, bin_centres, b, fitted_params, sem=None, ax=None, c='k', dashed=False):
     pdf_x = np.linspace(-b, b, 100)  # x vals for the fitted von Mises pdf
     pdf_y = vonmises.pdf(pdf_x,
                          fitted_params['kappa'],
@@ -272,8 +272,12 @@ def plot_err_distr(binned_errors, bin_centres, b, fitted_params, sem=None, ax=No
         # add error bars for datapoints
         ax.errorbar(bin_centres, binned_errors, yerr=sem, fmt='none', ecolor=c)
     ax.plot(bin_centres, binned_errors, 'o', mec=c, mfc='w')
-    ax.plot(pdf_x, pdf_y, '-', c=c, lw=2, label='fit')
-    x_ticks = [-100, 0, 100] # to match the monkey figure
+    if dashed:
+        line_style = '--'
+    else:
+        line_style = '-'
+    ax.plot(pdf_x, pdf_y, line_style, c=c, lw=2, label='fit')
+    x_ticks = [-100, 0, 100]  # to match the monkey figure
     ax.set_xticks(np.radians(x_ticks))
     ax.set_xticklabels(x_ticks)
     ax.set_xlabel('angular error (degrees)')
@@ -292,31 +296,36 @@ def plot_all_error_data(constants, test_conditions, all_results):
         # plot results as different panels
         n_conditions = len(test_conditions)
         fig, axes = plt.subplots(1, n_conditions, sharex='all', sharey='all')
-        fig.set_size_inches((12.8, 3.4))
+        fig_size = (12.8, 3.4) if n_conditions > 1 else (4.27, 3.4)
+        fig.set_size_inches(fig_size)
         for i, condition in enumerate(test_conditions):
+            curr_axes = axes[i] if n_conditions > 1 else axes
             plot_err_distr(all_results[condition]['mean_errs'],
                            all_results[condition]['bin_centres'],
                            all_results[condition]['bin_max'],
                            all_results[condition]['fitted_params'],
                            sem=all_results[condition]['sem_errs'],
-                           ax=axes[i])
-            plt.title(condition)
+                           ax=curr_axes)
+            curr_axes.set_title(condition)
         plt.tight_layout()
     else:
         # plot valid and invalid trials on one plot
-        plt.figure()
+        plt.figure(figsize=(4.27, 3.4))
         ax = plt.subplot(111)
         # plot valid trials
         conditions = ['valid_trials', 'invalid_trials']
         plot_colours = ['g', 'r']
         for condition, colour in zip(conditions, plot_colours):
+            dashed = constants.PARAMS['cue_validity'] == .5
             plot_err_distr(all_results[condition]['mean_errs'],
                            all_results[condition]['bin_centres'],
                            all_results[condition]['bin_max'],
                            all_results[condition]['fitted_params'],
                            sem=all_results[condition]['sem_errs'],
                            ax=ax,
-                           c=colour)
+                           c=colour,
+                           dashed=dashed)
+        plt.tight_layout()
 
 
 def plot_mixture_model_params_validity(mixture_param_data_dict):
