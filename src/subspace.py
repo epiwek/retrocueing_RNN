@@ -2,6 +2,8 @@
 # for a given dataset.
 
 import numpy as np
+import torch
+import pickle
 from numpy.linalg import lstsq
 from sklearn.decomposition import PCA
 from scipy.spatial import ConvexHull
@@ -15,6 +17,7 @@ class SinglePlaneSubspace:
         self.fitted_plane = None
         self.plane_vec1 = None
         self.plane_vec2 = None
+        self.plane_vecs_xy = None
         self.plane_normal = None
         self.is_concave = None
         self.missing_vtx = None
@@ -39,12 +42,13 @@ class SinglePlaneSubspace:
         self.fitted_plane = fitted_plane
         self.plane_vec1 = fitted_plane.components_[0, :]
         self.plane_vec2 = fitted_plane.components_[1, :]
+        self.plane_vecs_xy = fitted_plane.components_
         return self.fitted_plane
 
     def get_normal(self):
         """
         Get the plane normal.
-        :return:
+
         """
         if self.fitted_plane is None:
             self.get_best_fit_plane()
@@ -54,7 +58,8 @@ class SinglePlaneSubspace:
     def get_new_basis(self):
         """
         Get the basis defined by the plane-defining vectors and the plane normal.
-        :return:
+        :return: new_basis
+        :rtype new_basis: np.ndarray
         """
         if self.plane_normal is None:
             self.get_normal()
@@ -217,7 +222,7 @@ class Geometry:
         # get second plane
         self.plane2 = SinglePlaneSubspace(self.plane2_coords_3d)
         self.plane2.construct_subspace()
-        return (self.plane1, self.plane2)
+        return self.plane1, self.plane2
 
     def pick_quadrilateral_sides(self):
         """
@@ -387,6 +392,9 @@ class Geometry:
         # CHECK - not sure why using the old plane vecs here, maybe it doesn't matter
         plane1_vecs = np.stack((self.plane1.plane_vec1, self.plane1.plane_vec2))
         plane2_vecs = np.stack((self.plane2.plane_vec1, self.plane2.plane_vec2))
+        # plane1_vecs = np.stack((self.plane1_basis_corrected[:, 0], self.plane1_basis_corrected[:, 1]))
+        # plane2_vecs = np.stack((self.plane2_basis_corrected[:, 0], self.plane2_basis_corrected[:, 1]))
+
         #
         # # center datapoints
         # plane1_points = points[:n_points, :] - points[:n_points, :].mean(0)
@@ -453,13 +461,15 @@ class Geometry:
 
         plane1.plane_vec1 = self.plane1.plane_vec1
         plane1.plane_vec2 = self.plane1.plane_vec2
-        plane1.plane_normal = self.plane1_basis_corrected[:, -1]
+        plane1.plane_normal = np.cross(plane1.plane_vec1, plane1.plane_vec2)
+        plane1_2d = plane1.compress_to_2d()
 
+        # set the basis to that of plane 1 - want to project the plane 2 datapoints into the basis of plane 1
         plane2.plane_vec1 = self.plane1.plane_vec1
         plane2.plane_vec2 = self.plane1.plane_vec2
-        plane2.plane_normal = self.plane1_basis_corrected[:, -1]
+        plane2.plane_normal = np.cross(plane2.plane_vec1, plane2.plane_vec2)
+        plane2.fitted_plane = plane1.fitted_plane
 
-        plane1_2d = plane1.compress_to_2d()
         plane2_2d = plane2.compress_to_2d()
 
         # calculate the phase-alignment using procrustes analysis
@@ -500,15 +510,55 @@ class Geometry:
         self.get_psi_degrees()
 
 
-class AllGeometries:
-    def __init__(self, data, constants):
-        self.data = data
-        self.constants = constants
-        self.cued_geometry = Geometry(self.data, self.constants)
-        self.uncued_geometry = Geometry(self.data, self.constants)
-        self.cued_uncued_geometry = Geometry(self.data, self.constants)
+# class AllTimepoints:
 
-    def get_cued_geometry(self):
-        self.cued_geometry.get_geometry()
+
+# class AllGeometries:
+#     def __init__(self, constants, model_number, trial_type='valid'):
+#         self.constants = constants
+#         self.model = str(model_number)
+#         self.n_colours = self.constants.PARAMS['B']
+#         self.trial_type = trial_type
+#         self.delay_names = ['delay' + str(delay_n + 1) for delay_n in range(self.constants.PARAMS['n_delays'])]
+#         self.all_data = None
+#         self.cued_geometry = None #Geometry(self.data, self.constants)
+#         self.uncued_geometry = None #Geometry(self.data, self.constants)
+#         self.cued_uncued_geometry = None #$Geometry(self.data, self.constants)
+#
+#     def get_all_data(self):
+#         base_path = self.constants.PARAMS['FULL_PATH']
+#         load_path = base_path + 'pca_data/' + self.trial_type + '_trials/pca_data_'
+#
+#         all_data = {}
+#         geometry_names = ['cued','uncued','cued_up_uncued_down','cued_down_uncued_up']
+#         geometry_fnames = ['','uncued_', 'cued_up_uncued_down_', 'cued_down_uncued_up_']
+#
+#         for geometry, fname in zip(geometry_names,geometry_fnames):
+#             with open(load_path + fname + 'model' + self.model + '.pckl', 'rb') as f:
+#                 all_data[geometry] = pickle.load(f)
+#         return geometry_names, all_data
+#
+#
+#     def get_cued_geometry(self):
+#         for delay in self.delay_names:
+#
+#             self.cued_geometry
+#             self.all_data['cued']
+#     def get_all_geometries(self):
+#
+#         geometry_names, all_data = self.get_all_data()
+#
+#         for geometry in geometry_names:
+#
+#                 self.geometry.delay = Geometry(all_data[geometry][delay], self.constants)
+#
+#
+#
+#         # get Uncued data
+#
+#         # get Cued/Uncued data
+#
+#     def get_cued_geometry(self):
+#         self.cued_geometry.get_geometry()
 
 
