@@ -240,7 +240,18 @@ def plot_angles_retrocue_timing(constants):
     plt.savefig(common_path + 'compare_cued_angles_sigma' + str(constants.PARAMS['sigma']) + '.png')
 
 
+def rectify_and_average(angles_radians):
+    """ Rectify (take the absolute value) angles and take their circular mean across the second array dimension. Results
+    will be wrapped to the [0, pi] interval.
+    :param angles_radians: Array with angles in radians, shape should be (n_models, n_conditions)
+    :type angles_radians: np.ndarray
+    """
+    assert len(angles_radians.shape) == 2, 'Angles should be a 2d array'
+    angles_rect_mean = pycircstat.mean(np.abs(angles_radians), axis=1)
+    return angles_rect_mean
+
 # %% circular stats for theta
+
 
 def print_mean_and_ci_angle(angles_radians, angle_name, geometry_name):
     """
@@ -260,11 +271,28 @@ def print_mean_and_ci_angle(angles_radians, angle_name, geometry_name):
         nonnan_ix = np.where(np.invert(np.isnan(angles_radians[:, delay])))[0]
         pct_nans = (1 - (len(nonnan_ix) / len(angles_radians))) * 100
 
-        mean_angle = pycircstat.descriptive.mean(angles_radians[nonnan_ix, delay])
+        if delay_names[delay] == 'pre-cue' and angle_name == 'theta':
+            # rectify the angles
+            mean_angle = pycircstat.descriptive.mean(np.abs(angles_radians[nonnan_ix, delay]))
+            try:
+                # the CI function issues an error when the data is not concentrated enough
+                ci = pycircstat.descriptive.mean_ci_limits(np.abs(angles_radians[nonnan_ix, delay]), ci=.95)
+            except UserWarning:
+                print(f'Warning: {delay_names[delay]} {angle_name} '
+                      f'angles not concentrated enough to calculate CI, setting to NaN.')
+                ci = np.nan
+        else:
+            mean_angle = pycircstat.descriptive.mean(angles_radians[nonnan_ix, delay])
+            try:
+                ci = pycircstat.descriptive.mean_ci_limits(angles_radians[nonnan_ix, delay], ci=.95)
+            except UserWarning:
+                print(f'{delay_names[delay]} {angle_name} '
+                      f'angles not concentrated enough to calculate CI, setting to NaN.')
+                ci = np.nan
+
         mean_angle = helpers.wrap_angle(mean_angle)  # wrap to [-pi,pi]
         mean_angle = np.degrees(mean_angle)
 
-        ci = pycircstat.descriptive.mean_ci_limits(angles_radians[nonnan_ix, delay], ci=.95)
         ci = np.degrees(ci)
 
         print(f"Angle {angle_name} for {geometry_name} geometry, {delay_names[delay]} delay: "
@@ -349,7 +377,8 @@ def get_inf_stats_theta_cued(angles_radians):
 
 def get_inf_stats_theta_uncued(angles_radians):
     """
-    Run and print the results of a Rayleigh test on the distribution of angles theta for the Uncued geometry.
+    Run and print the results of a Rayleigh test on the distribution of angles theta for the Uncued geometry. H1 states
+    that the angles are significantly clustered.
 
     :param angles_radians: (n_models) Theta uncued angle values for the post-cue delay in radians
     :type angles_radians: np.ndarray
@@ -365,9 +394,9 @@ def get_inf_stats_theta_uncued(angles_radians):
 
 def get_inf_stats_theta_cued_vs_uncued(angles_radians):
     """
-    Run and print the results of a v-test on the distribution of theta angles for the Cued-Uncued geometry,
-    to test whether the angles are clustered with a mean = 90. If the test comes back non-significant, runs a follow-up
-    Rayleigh test to check for significant clustering and prints the circular mean.
+    Run and print the results of a v-test on the distribution of theta angles for the Cued-Uncued geometry. H1 states
+    that the angles are clustered with a mean = 90. If the test comes back non-significant, runs a follow-up Rayleigh
+    test to check for significant clustering and prints the circular mean.
 
     :param angles_radians: (n_models) Theta cued-uncued angle values in radians
     :type angles_radians: np.ndarray
@@ -392,39 +421,13 @@ def get_inf_stats_theta_cued_vs_uncued(angles_radians):
 
 # %% circular stats - psi
 
-# psi cued
-# def get_descriptive_stats_psi_cued(psi_radians):
-#     """
-#
-#     :param psi_radians:
-#     :return:
-#     """
-#
-#     n_delays = psi_radians.shape[1]
-#     for delay in n_delays()
-#
-#     nonnan_ix = np.where(np.invert(np.isnan(psi_radians[:, 0])))[0]
-#     mean_pre = pycircstat.descriptive.mean(psi_radians[nonnan_ix, 0])
-#     mean_pre = helpers.wrap_angle(mean_pre)  # wrap to [-pi,pi]
-#     # ci_pre = pycircstat.descriptive.mean_ci_limits(pa_radians[nonnan_ix,0], ci=.95)
-#
-#     nonnan_ix = np.where(np.invert(np.isnan(psi_radians[:, 1])))[0]
-#     mean_post = pycircstat.descriptive.mean(psi_radians[nonnan_ix, 1])
-#     mean_post = helpers.wrap_angle(mean_post)
-#     ci_post = pycircstat.descriptive.mean_ci_limits(psi_radians[nonnan_ix, 1], ci=.95)
-#
-#     # print('Pa: pre-cue mean ± 95 CI: %.2f ± %.2f' %(np.degrees(mean_pre),np.degrees(ci_pre)))
-#     print('Pa: pre-cue mean: %.2f ' % (np.degrees(mean_pre)))
-#     print('Pa : post-cue mean ± 95 CI: %.2f ± %.2f' % (np.degrees(mean_post), np.degrees(ci_post)))
-
-
 def get_inf_stats_psi_cued(psi_radians):
     """
     Run and print the results of the inferential statistics on the distribution of angles psi for the Cued geometry.
 
     Runs 2 tests:
-        1) Rayleigh test to test whether the pre-cue angles are significantly clustered
-        2) V-test to test whether the post-cue angles are clustered with a mean=0 degrees
+        1) Rayleigh test to test whether the pre-cue angles are significantly clustered (H1)
+        2) V-test to test whether the post-cue angles are clustered with a mean=0 degrees (H1)
 
     Additionally, for experiment 4, it also runs the following contrast:
     3) V-test to test whether the post-probe angles are clustered with a mean=0 degrees
@@ -455,17 +458,17 @@ def get_inf_stats_psi_cued(psi_radians):
         print('    v-stat = %.3f, p = %.3f, N = %d' % (v, p, len(non_nan_ix)))
 
 
-def get_inf_stats_psi_other(psi_radians, geometry_name):
+def get_inf_stats_psi_phase_aligned(psi_radians, geometry_name):
     """
-    Run and print the results of a v-test on the distribution of psi angles for the Uncued or Cued-Uncued geometry,
-    to test whether the angles are clustered with a mean = 0.
+    Run and print the results of a v-test on the distribution of psi angles for the Uncued or Cued-Uncued geometry. H1
+    states that the angles are clustered with a mean = 0.
 
     :param psi_radians: (n_models) Psi angle values in radians
-    :type pa_radians: np.ndarray
+    :type psi_radians: np.ndarray
     :param geometry_name: name of the geometry. Pick from 'Uncued' and 'Cued-Uncued'
     :type geometry_name: str
 =    """
-    if geometry_name == 'cued':
+    if geometry_name == 'cued' or geometry_name == 'Cued':
         raise ValueError("For the Cued geometry, use the 'get_inf_stats_psi_cued' function.")
 
     if len(psi_radians.shape) > 1:
@@ -481,192 +484,352 @@ def get_inf_stats_psi_other(psi_radians, geometry_name):
     print('    v-stat = %.3f, p = %.3f, N = %d' % (v, p_val, len(non_nan_ix)))
 
 
+def get_inf_stats_angle_clustered(angle_radians, angle_name, geometry_name, rectified=False):
+    """
+    Run and print the results of a Rayleigh test on the distribution of angles for a given geometry. H1 states that
+    the angles are significantly clustered. Print the circular mean.
+
+    :param angle_radians: (n_models) Angle values in radians
+    :type angle_radians: np.ndarray
+    :param geometry_name: name of the angle
+    :type geometry_name: str
+    :param angle_name: name of the geometry.
+    :type angle_name: str
+    :param rectified: Optional flag for rectified angles. If true, multiplies the angle estimates by 2 (to stretch the
+    possibe range to [0, 2pi] - this is the assumption of a Rayleigh test. Default is False.
+    :type rectified: bool
+    """
+
+    assert len(angle_radians.shape) == 1, 'angle_radians should be one-dimensional '
+
+    # need to remove nans first
+    non_nan_ix = np.where(np.invert(np.isnan(angle_radians)))[0]
+
+    if rectified:
+        # mutiple angles by 2 to stretch the range to [0, 2pi] as per Rayleigh test assumption
+        p_val, z_stat = pycircstat.tests.rayleigh(angle_radians[non_nan_ix]*2)
+    else:
+        p_val, z_stat = pycircstat.tests.rayleigh(angle_radians[non_nan_ix])
+
+    angle_mean = pycircstat.descriptive.mean(angle_radians[non_nan_ix])
+    angle_mean_degrees = np.degrees(angle_mean)
+
+    print(f'Rayleigh test for uniformity in {geometry_name} angles {angle_name}:')
+    print('    z-stat = %.3f, p = %.3f, N = %d, mean = %.2f' % (z_stat, p_val, len(non_nan_ix), angle_mean_degrees))
+
 # %% runners
-def run_theta_angles_analysis(constants, theta_degrees, geometry_name):
+
+
+def run_angles_analysis(constants, theta_degrees, psi_degrees, geometry_name):
+    """
+    Analyse the plane angles for a given geometry ('cued', 'uncued' or 'cued-uncued').
+
+    Plots the theta and psi angles and runs the inferential statistical tests.
+
+    :param constants: Experimental parameters.
+    :type constants: module :
+    :param theta_degrees: Array with theta angle values in degree of shape (n_models, n_delays).
+    :type theta_degrees: np.ndarray
+    :param psi_degrees: Array with psi angle values in degree of shape (n_models, n_delays). If not calculated for a
+        given geometry, pass None.
+    :type psi_degrees: np.ndarray or None
+    :param geometry_name: Geometry name, choose from: 'cued', 'uncued' and 'cued-uncued'.
+    :type geometry_name: str
+
+    """
+    assert geometry_name in ['cued', 'uncued', 'cued-uncued'], \
+        "Invalid geometry name, choose from: 'cued', 'uncued' and 'cued-uncued'"
+
     # convert angles into radians
     theta_radians = np.radians(theta_degrees)
+    psi_radians = np.radians(psi_degrees) if psi_degrees is not None else None
 
-    # plot angles
     if geometry_name == 'cued':
-        cplot.plot_plane_angles_multiple(constants, theta_radians)
-        # plt.savefig(constants.PARAMS['FIG_PATH'] + 'plane_angles.svg')
+        # plot theta
+        if constants.PARAMS['experiment_number'] > 2:
+            # plot pre- and post-cue on separate subplots
+            cplot.plot_plane_angles_multiple(constants, theta_radians, paired=False, fig_name=f"theta_{geometry_name}")
+        elif constants.PARAMS['experiment_number'] == 1:
+            # plot pre- and post-cue on one plot
+            cplot.plot_plane_angles_multiple(constants, theta_radians, fig_name=f"theta_{geometry_name}")
 
-        # get descriptive stats
-        print_theta_mean(theta_radians, geometry_name)
+        # save figure
+        if constants.PLOT_PARAMS['save_plots']:
+            plt.savefig(f"constants.PARAMS['FIG_PATH']theta_plane_angles_{geometry_name}.svg")
 
-        # get inferential stats
+        # get descriptive stats for theta
+        print_mean_and_ci_angle(theta_radians, 'theta', geometry_name)
+
+        # get inferential stats for theta
         get_inf_stats_theta_cued(theta_radians)
 
+        # plot psi
+        cplot.plot_plane_angles_multiple(constants, psi_radians, paired=False, fig_name=f"psi_{geometry_name}")
+        # save figure
+        if constants.PLOT_PARAMS['save_plots']:
+            plt.savefig(f"{constants.PARAMS['FIG_PATH']}psi_plane_angles_{geometry_name}.svg")
+
+        # get inferential stats for psi
+        get_inf_stats_psi_cued(psi_radians)
+
     elif geometry_name == 'uncued':
-        pass
 
+        # plot theta angles
+        cplot.plot_plane_angles_single(constants, theta_radians, 'post', fig_name=f"theta_post_{geometry_name}")
+        if constants.PLOT_PARAMS['save_plots']:
+            plt.savefig(f"constants.PARAMS['FIG_PATH']theta_plane_angles_{geometry_name}_postcue.svg")
 
-def run_psi_angles_analysis(constants, psi_degrees):
-    psi_radians = np.radians(psi_degrees)
+        # run inferential stats on theta
+        get_inf_stats_theta_uncued(theta_radians)
 
-    cplot.plot_plane_angles_multiple(constants, psi_radians, paired=False)
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'phase_align_cued.svg')
+        # plot psi
+        cplot.plot_plane_angles_single(constants,
+                                       psi_radians,
+                                       cond='post',
+                                       fig_name=f"psi_post_{geometry_name}")
+        if constants.PLOT_PARAMS['save_plots']:
+            plt.savefig(f"constants.PARAMS['FIG_PATH']psi_plane_angles_{geometry_name}.svg")
 
-    # run stats
-    get_descriptive_stats_psi_cued(psi_radians)
-    if constants.PARAMS['experiment_number'] == 4:
-        get_inf_stats_angles_expt4(psi_radians)
+        # get inferential stats for psi
+        get_inf_stats_psi_phase_aligned(psi_radians, geometry_name)
+
     else:
-        get_inf_stats_pa_cued(psi_radians)
-    return
+        # cued-uncued geometry
+
+        # get rectified mean angles
+        angles_radians_rect_mean = pycircstat.mean(np.abs(theta_radians), axis=1)
+
+        # plot theta angles
+        cplot.plot_plane_angles_single(constants, angles_radians_rect_mean, 'cu', fig_name=f"theta_{geometry_name}")
+        if constants.PLOT_PARAMS['save_plots']:
+            plt.savefig(f"constants.PARAMS['FIG_PATH']theta_plane_angles_{geometry_name}.svg")
+
+        # run inferential stats on theta
+        get_inf_stats_theta_cued_vs_uncued(angles_radians_rect_mean)
 
 
-def run_plane_angles_analysis(constants):
-    # load data
-    load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
-    angles = pickle.load(open(load_path + 'all_theta.pckl', 'rb'))
-    angles_radians = np.radians(angles)
-    PVEs_3D = pickle.load(open(load_path + 'all_PVEs_3D.pckl', 'rb'))
+def run_rot_unrot_angles_analysis(constants, psi_degrees, theta_degrees, plane_labels):
+    """
+    Analyse the plane angles for the 'rotated' and 'unrotated' Cued plane.
 
-    # plot PVEs
-    plot_PVEs_3D(constants, PVEs_3D)
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'PVEs_3D.png')
-    # plot angles
-    plot_plane_angles_multiple(constants, angles_radians)
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'plane_angles.svg')
+    For each angle (theta, psi), rectifies the values to be within [0, pi] and takes the average across cross-validation
+    folds, then plots the rotated and unrotated angle averages.
 
-    # get descriptive stats
-    get_descriptive_stats_angles_cued(angles_radians)
+    For theta, checks if the difference between the rotated and unrotated angles is significantly clustered, across all
+    models. For psi, checks if the two psi estimates are significantly clustered.
+
+    :param constants: Experimental parameters.
+    :type constants: module
+    :param psi_degrees: Dictionary with 'rotated' and 'unrotated' keys. Each entry contains the psi angle values in
+        degrees, of shape (n_models, n_cv_folds)
+    :type psi_degrees: dict
+    :param theta_degrees: Dictionary with 'rotated' and 'unrotated' keys. Each entry contains the theta angle values in
+        degrees, of shape (n_models, n_cv_folds)
+    :type theta_degrees: dict
+    :param plane_labels: list of plane labels ('unrotated' and 'rotated')
+    :type plane_labels: list
+    """
+    if constants.PARAMS['experiment_number'] == 2 or constants.PARAMS['experiment_number'] == 4:
+        raise NotImplementedError('Analysis only implemented for Experiments 1 and 3')
+
+    psi, theta = {}, {}
+    plot_markers = ['bt', 'bs']
+    # loop over rotated and unrotated planes
+    for marker, label in zip(plot_markers, plane_labels):
+        # convert angles into radians
+        psi_radians = np.radians(psi_degrees[label])
+        theta_radians = np.radians(theta_degrees[label])
+
+        # rectify and average angles across cv folds
+        psi[label] = rectify_and_average(psi_radians)
+        theta[label] = rectify_and_average(theta_radians)
+
+        # plot psi
+        cplot.plot_plane_angles_single(constants, psi[label], marker, fig_name=f"psi_{label}")
+        # save
+        if constants.PLOT_PARAMS['save_plots']:
+            plt.savefig(f"constants.PARAMS['FIG_PATH']psi_plane_angles_{label}_cued_plane.svg")
+
+        # plot theta
+        cplot.plot_plane_angles_single(constants, theta[label], marker, fig_name=f"theta_{label}")
+        if constants.PLOT_PARAMS['save_plots']:
+            plt.savefig(f"constants.PARAMS['FIG_PATH']theta_plane_angles_{label}_cued_plane.svg")
+
+    # compare theta with a Rayleigh test
+    theta_difference = theta['rotated'] - theta['unrotated']
+    get_inf_stats_angle_clustered(theta_difference, 'theta', 'rotated unrotated difference')
+
+    # analyse psi with Rayleigh tests
+    for label in plane_labels:
+        get_inf_stats_angle_clustered(psi[label], 'psi', label)
+
+
+# def run_psi_angles_analysis(constants, psi_degrees):
+#     psi_radians = np.radians(psi_degrees)
+#
+#     cplot.plot_plane_angles_multiple(constants, psi_radians, paired=False)
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'phase_align_cued.svg')
+#
+#     # run stats
+#     get_descriptive_stats_psi_cued(psi_radians)
+#     if constants.PARAMS['experiment_number'] == 4:
+#         get_inf_stats_angles_expt4(psi_radians)
+#     else:
+#         get_inf_stats_pa_cued(psi_radians)
+#     return
+
+
+# def run_plane_angles_analysis(constants):
+#     # load data
+#     load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
+#     angles = pickle.load(open(load_path + 'all_theta.pckl', 'rb'))
+#     angles_radians = np.radians(angles)
+#     PVEs_3D = pickle.load(open(load_path + 'all_PVEs_3D.pckl', 'rb'))
+#
+#     # plot PVEs
+#     plot_PVEs_3D(constants, PVEs_3D)
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'PVEs_3D.png')
+#     # plot angles
+#     plot_plane_angles_multiple(constants, angles_radians)
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'plane_angles.svg')
+#
+#     # get descriptive stats
+#     get_descriptive_stats_angles_cued(angles_radians)
 
     # get inferential stats
-    get_inf_stats_angles_cued(angles_radians)
+    # get_inf_stats_angles_cued(angles_radians)
 
 
-def run_plane_angles_analysis_uncued(constants):
-    # load data
-    load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
-    angles = pickle.load(open(load_path + 'all_theta_uncued_post-cue.pckl', 'rb'))
-    angles_radians = np.radians(angles)
-
-    # plot angles
-    plot_plane_angles_single(constants, angles_radians, 'post')
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_uncued_postcue.svg')
-
-    # run stats
-    get_inf_stats_angles_uncued(angles_radians)
-
-
-def run_plane_angles_analysis_cued_vs_uncued(constants):
-    # load data
-    load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
-    angles = pickle.load(open(load_path + 'cued_vs_uncued_theta.pckl', 'rb'))
-    angles_radians = np.radians(angles)
-
-    # get rectified mean
-    angles_radians_rect_mean = pycircstat.mean(np.abs(angles_radians), axis=1)
-    plot_plane_angles_single(constants, angles_radians_rect_mean, 'cu')
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_cued_vs_uncued.svg')
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_cued_vs_uncued.png')
-
-    get_inf_stats_angles_cued_vs_uncued(angles_radians_rect_mean)
+# def run_plane_angles_analysis_uncued(constants):
+#     # load data
+#     load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
+#     angles = pickle.load(open(load_path + 'all_theta_uncued_post-cue.pckl', 'rb'))
+#     angles_radians = np.radians(angles)
+#
+#     # plot angles
+#     plot_plane_angles_single(constants, angles_radians, 'post')
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_uncued_postcue.svg')
+#
+#     # run stats
+#     get_inf_stats_angles_uncued(angles_radians)
 
 
-def run_phase_align_cued(constants):
-    load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
-    pa = pickle.load(open(load_path + 'all_psi.pckl', 'rb'))
-    pa_radians = np.radians(pa)
-
-    plot_plane_angles_multiple(constants, pa_radians, paired=False)
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'phase_align_cued.svg')
-    # run stats
-    get_descriptive_stats_pa_cued(pa_radians)
-    if constants.PARAMS['experiment_number'] == 3:
-        get_inf_stats_angles_expt3(pa_radians)
-    else:
-        get_inf_stats_pa_cued(pa_radians)
-
-
-def run_phase_align_uncued(constants):
-    load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
-    pa = pickle.load(open(load_path + 'all_psi_uncued_post-cue.pckl', 'rb'))
-    pa_radians = np.radians(pa)
-
-    plot_plane_angles_single(constants, pa_radians, cond='post')
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'phase_align_uncued.svg')
-    # run stats
-    get_inf_stats_pa_uncued(pa_radians)
+# def run_plane_angles_analysis_cued_vs_uncued(constants):
+#     # load data
+#     load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
+#     angles = pickle.load(open(load_path + 'cued_vs_uncued_theta.pckl', 'rb'))
+#     angles_radians = np.radians(angles)
+#
+#     # get rectified mean
+#     angles_radians_rect_mean = pycircstat.mean(np.abs(angles_radians), axis=1)
+#     plot_plane_angles_single(constants, angles_radians_rect_mean, 'cu')
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_cued_vs_uncued.svg')
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_cued_vs_uncued.png')
+#
+#     get_inf_stats_angles_cued_vs_uncued(angles_radians_rect_mean)
 
 
-def run_phase_align_cued_vs_uncued(constants):
-    load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
-    pa = pickle.load(open(load_path + 'cued_vs_uncued_psi.pckl', 'rb'))
-    pa_radians = np.radians(pa)
+# def run_phase_align_cued(constants):
+#     load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
+#     pa = pickle.load(open(load_path + 'all_psi.pckl', 'rb'))
+#     pa_radians = np.radians(pa)
+#
+#     plot_plane_angles_multiple(constants, pa_radians, paired=False)
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'phase_align_cued.svg')
+#     # run stats
+#     get_descriptive_stats_pa_cued(pa_radians)
+#     if constants.PARAMS['experiment_number'] == 3:
+#         get_inf_stats_angles_expt3(pa_radians)
+#     else:
+#         get_inf_stats_pa_cued(pa_radians)
 
-    pa_radians_rect_mean = pycircstat.mean(np.abs(pa_radians), axis=1)
-    # plot_plane_angles_multiple(constants,pa_radians,paired=True)
-    plot_plane_angles_single(constants,
-                             pa_radians_rect_mean, cond='cu')
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'phase_align_cued_uncued.svg')
-    # run stats
-    get_inf_stats_pa_cued_vs_uncued(pycircstat.mean(pa_radians, axis=1))
+
+# def run_phase_align_uncued(constants):
+#     load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
+#     pa = pickle.load(open(load_path + 'all_psi_uncued_post-cue.pckl', 'rb'))
+#     pa_radians = np.radians(pa)
+#
+#     plot_plane_angles_single(constants, pa_radians, cond='post')
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'phase_align_uncued.svg')
+#     # run stats
+#     get_inf_stats_pa_uncued(pa_radians)
 
 
-def run_plane_angles_analysis_expt3(constants):
-    # load data
-    load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
-    angles = pickle.load(open(load_path + 'all_theta.pckl', 'rb'))
-    angles_radians = np.radians(angles)
-    PVEs_3D = pickle.load(open(load_path + 'all_PVEs_3D.pckl', 'rb'))
+# def run_phase_align_cued_vs_uncued(constants):
+#     load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
+#     pa = pickle.load(open(load_path + 'cued_vs_uncued_psi.pckl', 'rb'))
+#     pa_radians = np.radians(pa)
+#
+#     pa_radians_rect_mean = pycircstat.mean(np.abs(pa_radians), axis=1)
+#     # plot_plane_angles_multiple(constants,pa_radians,paired=True)
+#     plot_plane_angles_single(constants,
+#                              pa_radians_rect_mean, cond='cu')
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'phase_align_cued_uncued.svg')
+#     # run stats
+#     get_inf_stats_pa_cued_vs_uncued(pycircstat.mean(pa_radians, axis=1))
 
-    # plot PVEs
-    plot_PVEs_3D(constants, PVEs_3D)
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'PVEs_3D.png')
-    # plot angles
-    plot_plane_angles_multiple(constants, angles_radians, paired=False, expt3=True)
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'plane_angles.svg')
 
-    # get inferential stats
-    get_inf_stats_angles_expt3(angles_radians)
+# def run_plane_angles_analysis_expt3(constants):
+#     # load data
+#     load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
+#     angles = pickle.load(open(load_path + 'all_theta.pckl', 'rb'))
+#     angles_radians = np.radians(angles)
+#     PVEs_3D = pickle.load(open(load_path + 'all_PVEs_3D.pckl', 'rb'))
+#
+#     # plot PVEs
+#     plot_PVEs_3D(constants, PVEs_3D)
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'PVEs_3D.png')
+#     # plot angles
+#     plot_plane_angles_multiple(constants, angles_radians, paired=False, expt3=True)
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'plane_angles.svg')
+#
+#     # get inferential stats
+#     get_inf_stats_angles_expt3(angles_radians)
 
     ## add PA
 
 
-def run_plane_angles_analysis_rotated_unrotated(constants):
-    load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
-    theta_unrotated = pickle.load(open(load_path + 'theta_unrotated_plane.pckl', 'rb'))
-    theta_rotated = pickle.load(open(load_path + 'theta_rotated_plane.pckl', 'rb'))
-    psi_unrotated = pickle.load(open(load_path + 'psi_unrotated_plane.pckl', 'rb'))
-    psi_rotated = pickle.load(open(load_path + 'psi_rotated_plane.pckl', 'rb'))
-
-    # plot theta unroated and rotated
-    theta_angles_radians = np.radians(np.stack((theta_unrotated, theta_rotated), 1))
-    plot_plane_angles_multiple(constants, theta_angles_radians, r=None, paired=False, cu=True, expt3=False,
-                               custom_labels=['unrotated', 'rotated'])
-
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_rotunrot.png')
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_rotunrot.svg')
-
-    # plot the difference rotated-unrotated
-    rot_unrot_dist = np.abs(theta_rotated) - np.abs(theta_unrotated)
-    plot_plane_angles_single(constants, np.radians(rot_unrot_dist), 'cu', r=None)
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_rotunrot_diff.png')
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_rotunrot_diff.svg')
-
-    # angles_radians = np.radians(np.stack((theta_unrotated_mean,rot_unrot_dist),1))
-
-    # plot pa
-    psi_angles_radians = np.radians(np.stack((psi_unrotated, psi_rotated), 1))
-    plot_plane_angles_multiple(constants, psi_angles_radians, r=None, paired=False, cu=True, expt3=False,
-                               custom_labels=['unrotated', 'rotated'])
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'psi_rotunrot.png')
-    plt.savefig(constants.PARAMS['FIG_PATH'] + 'psi_rotunrot.svg')
-
-    # test difference in theta rotated and unrotated
-    rot_unrot_diff = np.abs(theta_angles_radians)[:, 1] - np.abs(theta_angles_radians)[:, 0]
-    pycircstat.rayleigh(rot_unrot_diff)
-    np.degrees(pycircstat.descriptive.mean(rot_unrot_diff))
-
-    # test phase alignemnt for unrotated
-
-    nonnan_ix = np.where(np.invert(np.isnan(psi_angles_radians[:, 0])))[0]
-    pycircstat.rayleigh((psi_angles_radians[nonnan_ix, 0]))
-    np.degrees(pycircstat.descriptive.mean((psi_angles_radians[nonnan_ix, 0])))
-
-    nonnan_ix = np.where(np.invert(np.isnan(psi_angles_radians[:, 1])))[0]
-    pycircstat.rayleigh((psi_angles_radians[nonnan_ix, 1]))
-    np.degrees(pycircstat.descriptive.mean((psi_angles_radians[nonnan_ix, 1])))
+# def run_plane_angles_analysis_rotated_unrotated(constants):
+#     load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials/'
+#     theta_unrotated = pickle.load(open(load_path + 'theta_unrotated_plane.pckl', 'rb'))
+#     theta_rotated = pickle.load(open(load_path + 'theta_rotated_plane.pckl', 'rb'))
+#     psi_unrotated = pickle.load(open(load_path + 'psi_unrotated_plane.pckl', 'rb'))
+#     psi_rotated = pickle.load(open(load_path + 'psi_rotated_plane.pckl', 'rb'))
+#
+#     # plot theta unroated and rotated
+#     theta_angles_radians = np.radians(np.stack((theta_unrotated, theta_rotated), 1))
+#     plot_plane_angles_multiple(constants, theta_angles_radians, r=None, paired=False, cu=True, expt3=False,
+#                                custom_labels=['unrotated', 'rotated'])
+#
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_rotunrot.png')
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_rotunrot.svg')
+#
+#     # plot the difference rotated-unrotated
+#     rot_unrot_dist = np.abs(theta_rotated) - np.abs(theta_unrotated)
+#     plot_plane_angles_single(constants, np.radians(rot_unrot_dist), 'cu', r=None)
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_rotunrot_diff.png')
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'theta_rotunrot_diff.svg')
+#
+#     # angles_radians = np.radians(np.stack((theta_unrotated_mean,rot_unrot_dist),1))
+#
+#     # plot pa
+#     psi_angles_radians = np.radians(np.stack((psi_unrotated, psi_rotated), 1))
+#     plot_plane_angles_multiple(constants, psi_angles_radians, r=None, paired=False, cu=True, expt3=False,
+#                                custom_labels=['unrotated', 'rotated'])
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'psi_rotunrot.png')
+#     plt.savefig(constants.PARAMS['FIG_PATH'] + 'psi_rotunrot.svg')
+#
+#     # test difference in theta rotated and unrotated
+#     rot_unrot_diff = np.abs(theta_angles_radians)[:, 1] - np.abs(theta_angles_radians)[:, 0]
+#     pycircstat.rayleigh(rot_unrot_diff)
+#     np.degrees(pycircstat.descriptive.mean(rot_unrot_diff))
+#
+#     # test phase alignemnt for unrotated
+#
+#     nonnan_ix = np.where(np.invert(np.isnan(psi_angles_radians[:, 0])))[0]
+#     pycircstat.rayleigh((psi_angles_radians[nonnan_ix, 0]))
+#     np.degrees(pycircstat.descriptive.mean((psi_angles_radians[nonnan_ix, 0])))
+#
+#     nonnan_ix = np.where(np.invert(np.isnan(psi_angles_radians[:, 1])))[0]
+#     pycircstat.rayleigh((psi_angles_radians[nonnan_ix, 1]))
+#     np.degrees(pycircstat.descriptive.mean((psi_angles_radians[nonnan_ix, 1])))
