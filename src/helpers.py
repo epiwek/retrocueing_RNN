@@ -244,7 +244,7 @@ def bin_labels(labels_list,n_bins):
 
 
 def equal_axes(ax):
-    '''
+    """
     Set the x, y and z-axis ranges to the same values.
 
     Parameters
@@ -256,7 +256,7 @@ def equal_axes(ax):
     -------
     None.
 
-    '''
+    """
     # move into a plotting script when get a chance
     ax_lims = np.array(ax.xy_viewLim)
     ax.set_xlim3d(np.min(ax_lims),np.max(ax_lims))
@@ -264,36 +264,34 @@ def equal_axes(ax):
     ax.set_zlim3d(np.min(ax_lims),np.max(ax_lims))
     
 
-def transfer_to_cpu():
-    '''
+def transfer_to_cpu(constants):
+    """
     Transfer training data to the CPU for analysis.
 
     Returns
     -------
     None.
 
-    '''
+    """
     
     # imports allow the function to be easily used outside of the main.py script
     import retrocue_model as retnet
-    import constants
-    
+
     device = torch.device('cpu')
     path = constants.PARAMS['FULL_PATH']    
     
     for m in np.arange(constants.PARAMS['n_models']):
         constants.PARAMS['model_number'] = m
         
-        #load data
+        # load data
         track_training = pickle.load(open(path+'training_data/'+'training_data_model'+str(m)+'.pckl','rb'))
-        
         
         for key,value in track_training.items():
             track_training[key] = track_training[key].to(device)
             
-        #% save on cpu
-        retnet.save_data(track_training, constants.PARAMS, path+'training_data/'+'training_data_model')
-        print('Model '+str(m)+' done')
+        # save on cpu
+        retnet.save_data(track_training, constants.PARAMS, f"{path}training_data/training_data_model")
+        print(f"Model {m} done")
 
 
 #%% circular statistics methods
