@@ -11,7 +11,7 @@ import itertools
 import torch
 import seaborn as sns
 from scipy.stats import norm
-from src.generate_data_vonMises import make_stimuli_vonMises
+from src.generate_data_von_mises import make_stimuli_vonMises
 from src.helpers import check_path
 
 ## TASK AND MODEL PARAMETERS ##
@@ -197,36 +197,29 @@ PARAMS['L'] = 2
 PARAMS['M'] = PARAMS['B'] * PARAMS['L']
 
 
-PLOT_PARAMS = {['4_colours'] : sns.color_palette("husl", 4)}
+PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 
-## PATHS ##
+#%% PATHS ##
 
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
-PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia'+'/'
-
-
-PARAMS['COND_PATH'] = PARAMS['BASE_PATH'] +'data_vonMises/experiment_' \
-        +str(PARAMS['experiment_number'])+'/'
+PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'
+PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
 
 if PARAMS['experiment_number'] == 4:
-    PARAMS['COND_PATH'] += 'validity_' + str(PARAMS['cue_validity']) +'/5_cycles/'
+    PARAMS['COND_PATH'] += f"validity_{PARAMS['cue_validity']}/5_cycles/"
 elif PARAMS['experiment_number'] == 2:
-    PARAMS['COND_PATH'] += 'delay2_' + str(PARAMS['trial_timings']['delay2_dur']) + 'cycles/'
+    PARAMS['COND_PATH'] += f"delay2_{PARAMS['trial_timings']['delay2_dur']}cycles/"
 
-
-print(PARAMS['COND_PATH'])
+print(PARAMS['COND_PATH'])  # print the condition path to the console
 check_path(PARAMS['COND_PATH'])
 
 # full parameterisation
-PARAMS['FULL_PATH'] = PARAMS['COND_PATH'] \
-        +'sigma' + str(PARAMS['sigma'])\
-            +'/kappa' + str(PARAMS['kappa_val'])\
-            +'/nrec' + str(PARAMS['n_rec'])\
-                +'/lr' + str(PARAMS['learning_rate']) + '/'
+PARAMS['FULL_PATH'] = f"{PARAMS['COND_PATH']}sigma{PARAMS['sigma']}/kappa{PARAMS['kappa_val']}/nrec{PARAMS['n_rec']}/" \
+                      f"lr{PARAMS['learning_rate']}/"
 
-PARAMS['FIG_PATH'] = PARAMS['FULL_PATH'] + 'figs/'
-check_path(PARAMS['FIG_PATH'])
+PARAMS['FIG_PATH'] = f"{PARAMS['FULL_PATH']}figs/"
+check_path(PARAMS['FIG_PATH'])  # create the figure folder if it doesn't exist
 
 PARAMS['MATLAB_PATH'] = '/Users/emilia/OneDrive - Nexus365/MATLAB/rnn_retrocue_data/'
-PARAMS['RAW_DATA_PATH'] = PARAMS['FULL_PATH'] + 'pca_data/'
-PARAMS['RESULTS_PATH'] = PARAMS['FULL_PATH'] + 'pca_data/'
+PARAMS['RAW_DATA_PATH'] = f"{PARAMS['FULL_PATH']}pca_data/"
+PARAMS['RESULTS_PATH'] = f"{PARAMS['FULL_PATH']}pca_data/"
