@@ -7,7 +7,7 @@ import src.generate_data_von_mises as dg
 def get_delay_timepoints(constants):
     """
     Extracts the endpoints of the delay intervals.
-    :param constants: Experimental constants module
+    :param constants: Experimental constants
     :type constants: module
     :return: list of indices corresponding to the delay end timepoints
     """
@@ -32,7 +32,8 @@ def split_train_test(eval_data, train_ixs, test_ixs, cv_fold):
     """
     Splits the data into train and test subsets using the training and test trial indices from a given cv fold.
 
-    :param eval_data: dictionary containing the to-be-split data of a () shape, under the 'data' key
+    :param eval_data: dictionary containing the to-be-split data of a (n_trials, n_timepoints, n_neurons) shape, under
+        the 'data' key
     :type eval_data: dict
     :param train_ixs: list of training trial indices for each cross-validation fold, (n_cv_folds)
     :type train_ixs: list
@@ -48,19 +49,44 @@ def split_train_test(eval_data, train_ixs, test_ixs, cv_fold):
 
 
 def extract_delays(data, delay_ixs):
-    """Extracts the subset of data corresponding to the delay timepoints."""
+    """
+    Extracts the subset of data corresponding to the delay timepoints.
+
+    :param data: data (m, n_timepoints, n)
+    :type data: torch.Tensor
+    :param delay_ixs: delay timepoint indices
+    :type delay_ixs: list
+    :return: delay_data array containing only the entries corresponding to the delay timepoints
+    """
     delay_data = data[:, delay_ixs, :]
     return delay_data
 
 
 def make_loc_arrays(delay_data, n_bins):
-    """Reshapes the data into two arrays. Each contains data from all delay timepoints and neurons for a single cue
-    location."""
+    """
+    Reshapes the data into two arrays. Each contains data from all delay timepoints and neurons for a single cue
+    location. Entries corresponding to the consecutive delay intervals are stacked as rows, columns correspond to
+    neurons. E.g., the first column of the array will contain the following data for the first neuron:
+        [colour_bin1_delay1;
+        colour_bin2_delay1;
+        colour_bin3_delay1;
+        colour_bin4_delay1;
+        colour_bin1_delay2;
+        colour_bin2_delay2;
+        colour_bin3_delay2;
+        colour_bin4_delay2;]
+
+    :param delay_data: data array (n_colour_bins*2, m, n)
+    :type delay_data: torch.Tensor
+    :param n_bins: number of colour bins
+    :type: int
+    :return: loc1_array, loc2_array
+    """
     n_neurons = delay_data.shape[-1]
     # extract the data from delays
     loc1_array = delay_data[:n_bins, :, :]
     loc2_array = delay_data[n_bins:, :, :]
-    # reshape tensors so that the data from each consecutive delay is stacked as rows and columns correspond to the
+    # reshape tensors so that the data from each consecutive delay is stacked as rows, and columns correspond to the
     # neurons
     loc1_array = loc1_array.transpose(0, 1).reshape((-1, n_neurons))
     loc2_array = loc2_array.transpose(0, 1).reshape((-1, n_neurons))
@@ -69,7 +95,29 @@ def make_loc_arrays(delay_data, n_bins):
 
 
 def preprocess_model_data_rot_unrot(constants, eval_data, train_ixs, test_ixs, n_bins):
-    """ Runs the full preprocessing pipeline. """
+    """
+    Runs the full preprocessing pipeline.
+
+    Splits the model evaluation data into train and test subsets in cross-validation, extracts the delay end timepoints
+    and bins the data into n_bins colour bins. Creates a location-specific array (e.g., an array containing 'cued' and
+    'uncued' colour representations from the 'cued_up_uncued_down' trials.
+
+    :param constants: Experimental constants
+    :type constants: module
+    :param eval_data: Dictionary containing the model evaluation data. Keys include: 'dimensions', 'data', and 'labels'.
+        Data entry has the following dimensionality: (n_trials, n_timepoints, n_neurons). For more details, refer to the
+        eval_model function in retrocue_model.py
+    :type eval_data: dict
+    :param train_ixs: list of training trial indices for each cross-validation fold, (n_cv_folds)
+    :type train_ixs: list
+    :param test_ixs: analogous list of test trial indices
+    :type test_ixs: list
+    :param n_bins: number of colour bins to bin data into
+    :type n_bins: int
+    :return: preprocessed_data: list of data dictionaries, each item corresponds to a cross-validation fold and contains
+        'train' and 'test' key, each in turn containing location-specific data under 'loc1' and 'loc1' 2.
+    """
+
     n_cv_folds = len(train_ixs)
     delay_ixs = get_delay_timepoints(constants)
 
@@ -98,8 +146,18 @@ def preprocess_model_data_rot_unrot(constants, eval_data, train_ixs, test_ixs, n
 
 
 def reshape_CDI_coords(constants, cued_up_coords, cued_down_coords):
-    """ Reshape the 3D coordinates into a nested list of the following format (n_validity types, n_delays, n_locations,
+    """
+    Reshape the 3D coordinates into a nested list of the following format: (n_validity types, n_delays, n_locations,
     n_colours), where locations are defined as 'cued' and 'uncued'.
+
+    :param constants: Experimental constants
+    :type constants: module
+    :param cued_up_coords: 3D coordinates fitted to the data from the 'cued_up_uncued_down' trials (n_datapoints, 3)
+    :type cued_up_coords: np.ndarray
+    :param cued_down_coords: analogous coordinates for the 'cued_down_uncued_up' trials
+    :type cued_down_coords: np.ndarray
+    :return: cued_up_reshaped, cued_down_reshaped, dim_numbers (dictionary with n_timepoints, n_locations, n_colours and
+    n_validity types.
     """
     # get the row indices corresponding to valid/invalid trials, different delay intervals and planes
     all_ixs, _, dim_numbers = get_CDI_coord_row_indices(constants)
@@ -119,6 +177,17 @@ def reshape_CDI_coords(constants, cued_up_coords, cued_down_coords):
 
 
 def get_CDI_coord_row_indices(constants):
+    """
+    Get the row indices in the CDI data array that correspond to the different conditions. Conditions are defined by the
+    validity type (valid/invalid) x delay x plane status (cued/uncued or probed/unprobed) combination.
+
+    Returns 3 outputs: array with all indices for a given condition (numpy array), dimension names (list) and dimension
+    numbers (list).
+
+    :param constants: Experimental constants
+    :type constants: module
+    :return: all_ixs, dim_names, dim_numbers
+    """
     # get the row indices corresponding to the different conditions (defined by the validity type (valid/invalid) x
     # delay x plane status (cued/uncued or probed/unprobed) combination
     n_locations = 2
@@ -151,6 +220,30 @@ def get_CDI_coord_row_indices(constants):
 
 
 def preprocess_CDI_data(constants, all_data_valid, all_data_invalid=None):
+    """
+    Run the full data preprocessing pipeline for the CDI analysis.
+
+    For trials defined by a given *cued* location (e.g. up - cued_up_uncued_down), aggregate binned data across cued and
+    uncued items (and valid and invalid trials where appropriate) from the delay end timepoints into a single array.
+    The two arrays are saved into an 'all_data' dictionary, where keys are model numbers, and each entry contains the
+    data arrays under 'cued_up_uncued_down' and 'cued_down_uncued_up' sub-keys. For example, to access the data from
+    'cued_up' trials for model 0, we would call: all_data[0]['cued_up_uncued_down']
+
+    :param constants: Experimental constants
+    :type constants: module
+    :param all_data_valid: dictionary containing the data from valid trials. Keys correspond to model numbers, and each
+        model entry contains sub-keys corresponding to the geometry names, with data stored under 'data'. For the
+        purpose of this function, each model-level sub-dictionary must contain the 'cued_up_uncued_down' and
+        'cued_down_uncued_up' keys. E.g., for model 0, data from the 'cued_up_uncued_down' trials would be stored under:
+        all_data_valid[0]['cued_up_uncued_down']['data']. For more information, consult the 'get_all_binned_data'
+        function in rep_geom_analysis.py
+    :type all_data_valid: dict
+    :param all_data_invalid: Optional. Analogous dictionary containing the data from invalid trials (relevant for
+        Experiment 3). Default is None (appropriate for all other experiments).
+    :type all_data_invalid: dict
+    :return: all_data dictionary, indexed by model number keys, with each model entry containing the aggregated data
+        under the 'cued_up_uncued_down' and 'cued_down_uncued_up' keys.
+    """
     # for trials defined by a given *cued* location (e.g. up), aggregate binned data across cued and uncued items
     # (and valid and invalid trials where appropriate) from the delay end timepoints
 
