@@ -93,7 +93,6 @@ class SinglePlaneSubspace:
         points_new_basis = (new_basis.T @ points_projected.T).T
 
         # test that change of basis got rid of the z-component
-        print('add test')
         assert points_new_basis[:, -1].round(6).sum() == 0, 'Change of basis failed to get rid of the z-component'
 
         return points_new_basis[:, :2]
