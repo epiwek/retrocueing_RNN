@@ -1,13 +1,9 @@
-# This script contains classes used to find the 3D subspace as well as the best-fitting planes
-# for a given dataset.
+# This file contains classes used to fit a 3D subspace as well as find the best-fitting planes for a given dataset.
 
 import numpy as np
-import torch
-import pickle
 from numpy.linalg import lstsq
 from sklearn.decomposition import PCA
 from scipy.spatial import ConvexHull
-
 import src.vec_operations as vops
 
 
@@ -99,11 +95,6 @@ class SinglePlaneSubspace:
         # test that change of basis got rid of the z-component
         print('add test')
         assert points_new_basis[:, -1].round(6).sum() == 0, 'Change of basis failed to get rid of the z-component'
-        # assertAlmostEqual(points_new_basis[:, -1].sum(),0)
-        # if points_new_basis[:, -1].round(6).sum() != 0:
-        #     # round to 6 digits to avoid numerical precision errors
-        #     raise ValueError('Change of basis failed to get rid of the z-component')
-        #     # get rid of the z-coord
 
         return points_new_basis[:, :2]
 
@@ -113,10 +104,6 @@ class SinglePlaneSubspace:
         :return:
         """
         points_2d = self.compress_to_2d()
-
-        # check that have 4 vertices
-        # if len(points_2D) != 4:
-        #     raise ValueError('4 vertices needed')
 
         # fit a convex hull to the datapoints
         hull = ConvexHull(points_2d)
@@ -255,16 +242,14 @@ class Geometry:
 
     def correct_plane_bases(self):
         """
-        Set the plane basis vectors to  correspond to sides of the quadrilateral as the basis for planes 1 and 2.
+        Set the plane basis vectors to correspond to sides of the quadrilateral as the basis for planes 1 and 2.
         :return:
         """
+        # pick corresponding sides of the quadrilateral
         side_ixs = self.pick_quadrilateral_sides()
-        # indices of neighbouring sides of the parallelogram in the format
-        # [corner vertex,side x,corner vertex,side y]
-        # pick corresponding sides
+        # indices of neighbouring sides of the parallelogram in the format: [corner vertex,side x,corner vertex,side y]
 
         # align the plane-defining vectors to the picked sides (but keep them orthogonal)
-
         points1 = self.plane1_coords_3d  # location 1 datapoints
         points2 = self.plane2_coords_3d  # location 2
 
@@ -311,21 +296,14 @@ class Geometry:
                     # rotate the other way
                     tmp = vops.rotate_plane_by_angle(b_new_basis, angle_diff)
                     # double check that vectors are orthogonal now
-
-                    print('Change this to a nicer test')
-                    if np.abs(np.dot(a_new_basis, tmp)) > 0.001:
-                        raise ValueError('New vectors still not orthogonal')
-                    else:
-                        b_new_basis = tmp
+                    assert np.abs(np.dot(a_new_basis, tmp)) < 0.001, 'New vectors still not orthogonal'
+                    b_new_basis = tmp
 
             # return to original (standard) basis
             b = plane_basis.T @ b_new_basis
 
             # double check that the new vectors in the standard basis *are* orthogonal
-            if np.abs(np.dot(a, b)) > 0.001:
-                print('Change this to a nicer test')
-                raise ValueError('New vectors not orthogonal')
-
+            assert np.abs(np.dot(a, b)) < 0.001, 'New vectors not orthogonal'
             plane_vecs_aligned.append(np.stack((a, b)))
 
         normal1_aligned = np.cross(plane_vecs_aligned[0][0, :], plane_vecs_aligned[0][1, :])
@@ -379,34 +357,28 @@ class Geometry:
         return theta_degrees
 
     def make_coplanar(self):
+        """
+        Force the two planes two be coplanar, to calculate the phase alignment angle between the corresponding
+        datapoints.
+
+        """
         # points, normal1, normal2
         # get 3d coords and fitted planes
-        # points = self.coords_3d
         if self.plane1_basis_corrected is None:
             self.correct_plane_bases()
 
         normal1 = self.plane1_basis_corrected[:, -1]
         normal2 = self.plane2_basis_corrected[:, -1]
 
-        # n_points = len(points) // 2
-        # CHECK - not sure why using the old plane vecs here, maybe it doesn't matter
         plane1_vecs = np.stack((self.plane1.plane_vec1, self.plane1.plane_vec2))
         plane2_vecs = np.stack((self.plane2.plane_vec1, self.plane2.plane_vec2))
-        # plane1_vecs = np.stack((self.plane1_basis_corrected[:, 0], self.plane1_basis_corrected[:, 1]))
-        # plane2_vecs = np.stack((self.plane2_basis_corrected[:, 0], self.plane2_basis_corrected[:, 1]))
 
-        #
-        # # center datapoints
-        # plane1_points = points[:n_points, :] - points[:n_points, :].mean(0)
-        # plane2_points = points[n_points:, :] - points[n_points:, :].mean(0)
+        # center datapoints
+
         plane1_points = self.plane1.coords_3d - self.plane1.coords_3d.mean(0)
         plane2_points = self.plane2.coords_3d - self.plane2.coords_3d.mean(0)
 
         n_points = plane1_points.shape[0]
-        #
-        # # get plane_defining vecs from pca
-        # plane1_vecs = get_best_fit_plane(plane1_points).components_
-        # plane2_vecs = get_best_fit_plane(plane2_points).components_
 
         # project the datapoints onto their corresponding planes
         plane1_points_p = np.stack([vops.get_projection(plane1_points[p, :], plane1_vecs) for p in range(n_points)])
@@ -415,23 +387,17 @@ class Geometry:
         # center so that mean of each plane is at the origin
         plane1_points_c = plane1_points_p - plane1_points_p.mean(0)
         plane2_points_c = plane2_points_p - plane2_points_p.mean(0)
-
-        # delete:
-        # points_coplanar = vops.make_coplanar(all_points, normal1, normal2)
         points_centered = np.concatenate((plane1_points_c, plane2_points_c), axis=0)
         # makes planes coplanar: by rotating plane 2 to be co-planar with plane 1
 
         # get the rotation axis and angle
-        # if planes already co-planar, leave them as they are - need a workaround
-        # because cross-product is not defined then (i.e. it's 0)
+        # if planes are already co-planar, leave them as they are - need a workaround because cross-product is not
+        # defined then (i.e. it's 0)
         if np.abs(np.dot(normal1, normal2).round(6)) == 1:
-            # rot_angle = 0
-            # rot_axis = []
             R = np.eye(len(normal1))  # rotation matrix
         else:
             # calculate the rotation angle (i.e. angle between the two normals)
             rot_angle = np.arccos(np.dot(normal1, normal2))
-            # print(np.dot(normal1,normal2))
             if rot_angle > np.pi / 2:
                 rot_angle += np.pi
 
@@ -443,15 +409,16 @@ class Geometry:
 
         # apply to plane2 points
         plane2_points = R.T @ points_centered[n_points:, :].T
-        # plane2_points = R.apply(points_centered[n_points:,:],inverse=True)
 
         # get new coordinates
         points_coplanar = np.concatenate((points_centered[:n_points, :], plane2_points.T), axis=0)
-        # points_new = np.concatenate((points_centered[:n_points,:],plane2_points),axis=0)
 
         return points_coplanar
 
     def get_phase_alignment(self):
+        """
+        Calculate the phase alignment angle psi (without correcting for orthogonal planes).
+        """
         # rotate plane 2 so that it is parallel to plane 1
         points_coplanar = self.make_coplanar()
 
@@ -488,12 +455,12 @@ class Geometry:
         return pa
 
     def get_psi_degrees(self):
+        """ Get the phase alignment angle psi in degrees. If planes are orthogonal, psi is set to NaN."""
         cos_theta, normal1, normal2 = self.get_cos_plane_angle_theta()
 
         # calculate phase alignment
-        # if angle between planes is within +-[90,180] range, it means that the
-        # planes are mirror images and calculating phase alignment does not
-        # make sense - set pa to nan
+        # if angle between planes is within +-[90,180] range, it means that the planes are mirror images and
+        # calculating phase alignment does not make sense - set pa to nan
         if cos_theta <= 0:
             self.psi_degrees = np.nan
         else:
@@ -508,57 +475,3 @@ class Geometry:
         self.correct_plane_bases()
         self.get_theta_degrees()
         self.get_psi_degrees()
-
-
-# class AllTimepoints:
-
-
-# class AllGeometries:
-#     def __init__(self, constants, model_number, trial_type='valid'):
-#         self.constants = constants
-#         self.model = str(model_number)
-#         self.n_colours = self.constants.PARAMS['B']
-#         self.trial_type = trial_type
-#         self.delay_names = ['delay' + str(delay_n + 1) for delay_n in range(self.constants.PARAMS['n_delays'])]
-#         self.all_data = None
-#         self.cued_geometry = None #Geometry(self.data, self.constants)
-#         self.uncued_geometry = None #Geometry(self.data, self.constants)
-#         self.cued_uncued_geometry = None #$Geometry(self.data, self.constants)
-#
-#     def get_all_data(self):
-#         base_path = self.constants.PARAMS['FULL_PATH']
-#         load_path = base_path + 'pca_data/' + self.trial_type + '_trials/pca_data_'
-#
-#         all_data = {}
-#         geometry_names = ['cued','uncued','cued_up_uncued_down','cued_down_uncued_up']
-#         geometry_fnames = ['','uncued_', 'cued_up_uncued_down_', 'cued_down_uncued_up_']
-#
-#         for geometry, fname in zip(geometry_names,geometry_fnames):
-#             with open(load_path + fname + 'model' + self.model + '.pckl', 'rb') as f:
-#                 all_data[geometry] = pickle.load(f)
-#         return geometry_names, all_data
-#
-#
-#     def get_cued_geometry(self):
-#         for delay in self.delay_names:
-#
-#             self.cued_geometry
-#             self.all_data['cued']
-#     def get_all_geometries(self):
-#
-#         geometry_names, all_data = self.get_all_data()
-#
-#         for geometry in geometry_names:
-#
-#                 self.geometry.delay = Geometry(all_data[geometry][delay], self.constants)
-#
-#
-#
-#         # get Uncued data
-#
-#         # get Cued/Uncued data
-#
-#     def get_cued_geometry(self):
-#         self.cued_geometry.get_geometry()
-
-
