@@ -2,12 +2,15 @@ import numpy as np
 import pandas as pd
 from src.subspace import Geometry
 import pickle
+import importlib
 import matplotlib.pyplot as plt
 import src.custom_plot as cplot
 import src.plane_angles_analysis as angles
 import src.vec_operations as vops
 import src.preprocess_rep_geom_data as ppc
 
+
+# %% get data and labels
 
 def get_unrotated_rotated_label(constants, preprocessed_data):
     """
@@ -127,14 +130,43 @@ def get_all_binned_data(constants, trial_type='valid', probed_unprobed=False):
     for model in range(constants.PARAMS['n_models']):
         all_data[model] = {}
         for geometry, f_name in zip(geometry_names, geometry_f_names):
-            with open(load_path + f_name + 'model' + str(model) + '.pckl', 'rb') as f:
+            with open(f"{load_path}{f_name}model{model}.pckl", 'rb') as f:
                 all_data[model][geometry] = pickle.load(f)
     return geometry_names, all_data
 
 
+def get_CDI_data(constants):
+    """
+    Load binned 'pca_data' dictionaries from all models, separately for each cued location trials (e.g.
+    cued_up_uncued_down). Data is aggregated across cued and uncued items (and valid and invalid trials where
+    appropriate) from the delay end timepoints.
+
+    :param constants: Experimental constants module.
+    :type constants: module
+    :return: cdi_data nested dictionary with model number keys, each containing the 'cued_up_uncued_down' and
+    'cued_down_uncued_up' sub-keys containing the data.
+
+    """
+    # get the data from valid and invalid trials and run the preprocessing to create two location-specific data arrays
+    if constants.PARAMS['cue_validity'] < 1:
+        # experiment 4, probabilistic conditions (cue validity < 1)
+        _, all_data_valid = get_all_binned_data(constants, trial_type='valid', probed_unprobed=True)
+        _, all_data_invalid = get_all_binned_data(constants, trial_type='invalid', probed_unprobed=True)
+
+        cdi_data = ppc.preprocess_CDI_data(constants, all_data_valid, all_data_invalid)
+    else:
+        # experiment 4, deterministic condition (cue validity = 1) and other experiments
+        is_expt_4 = constants.PARAMS['experiment_number'] == 4
+        _, all_data_valid = get_all_binned_data(constants, trial_type='valid', probed_unprobed=is_expt_4)
+        cdi_data = ppc.preprocess_CDI_data(constants, all_data_valid)
+
+    return cdi_data
+
+
+# %% define looper functions that will loop across models, delay intervals and geometries
+
 def model_geometry_looper(constants, all_data, geometry_name, delay_name=None):
     """
-    returns all_subspaces, all_psi, all_theta, all_PVEs
 
     Calculates the specified geometry for a specific memory delay for all models. Possible geometries include: 'cued',
     'uncued', 'cued_up_uncued_down' and 'cued_down_uncued_up'. Outputs 4 arguments:
@@ -156,6 +188,9 @@ def model_geometry_looper(constants, all_data, geometry_name, delay_name=None):
     :type delay_name: str
     :return: all_subspaces, all_psi, all_theta, all_PVEs
     """
+    assert geometry_name in ['cued', 'uncued', 'cued_up_uncued_down', 'cued_down_uncued_up'], \
+        "Incorrect geometry name, choose from : 'cued', 'uncued', 'cued_up_uncued_down' and 'cued_down_uncued_up'"
+
     all_subspaces, all_coords = {}, {}
     all_psi, all_theta, all_PVEs = [], [], []
     for model in range(constants.PARAMS['n_models']):
@@ -213,34 +248,85 @@ def delay_looper_geometry(constants, all_data, geometry_name):
     return cued_subspaces, psi, theta, PVEs
 
 
-def get_CDI_data(constants):
+def experiment_2_looper(constants):
     """
-    Load binned 'pca_data' dictionaries from all models, separately for each cued location trials (e.g.
-    cued_up_uncued_down). Data is aggregated across cued and uncued items (and valid and invalid trials where
-    appropriate) from the delay end timepoints.
+    Loop through all versions of Experiment 2 (defined by the length of the post-cue delay interval). Get the data and
+    calculate the Cued geometry in a single loop. Returns the theta angle estimates and PC variance explained values for
+    the fitted 3D subspaces.
 
     :param constants: Experimental constants module.
     :type constants: module
-    :return: cdi_data nested dictionary with model number keys, each containing the 'cued_up_uncued_down' and
-    'cued_down_uncued_up' sub-keys containing the data.
-
+    :return: all_theta (n_models, n_delays, n_delay2_lengths), all_PVES (n_models, n_delays, n_PCs, n_delay2_lengths)
     """
-    # get the data from valid and invalid trials and run the preprocessing to create two location-specific data arrays
-    if constants.PARAMS['cue_validity'] < 1:
-        # experiment 4, probabilistic conditions (cue validity < 1)
-        _, all_data_valid = get_all_binned_data(constants, trial_type='valid', probed_unprobed=True)
-        _, all_data_invalid = get_all_binned_data(constants, trial_type='invalid', probed_unprobed=True)
+    assert constants.PARAMS['experiment_number'] == 2, \
+        'Function should only be used with Experiment 2 (retrocue timing)'
+    delay2_max_length = \
+        (constants.PARAMS['trial_timings']['delay1_dur'] + constants.PARAMS['trial_timings']['delay2_dur']) // 2
 
-        cdi_data = ppc.preprocess_CDI_data(constants, all_data_valid, all_data_invalid)
-    else:
-        # experiment 4, deterministic condition (cue validity = 1) and other experiments
-        is_expt_4 = constants.PARAMS['experiment_number'] == 4
-        _, all_data_valid = get_all_binned_data(constants, trial_type='valid', probed_unprobed=is_expt_4)
-        cdi_data = ppc.preprocess_CDI_data(constants, all_data_valid)
+    all_theta = []
+    all_PVEs = []
+    # loop through the different experiment variants, load their respective constants modules and collect Cued data
+    for delay2_length in range(delay2_max_length + 1):
+        module_name = f"constants.constants_expt2_delay2_{delay2_length}cycles"
+        c = importlib.import_module(module_name)
 
-    return cdi_data
+        # get the data - make sure that all data from all variants of the experiment is saved to file.
+        try:
+            _, all_data = get_all_binned_data(c, trial_type='valid')
+        except FileNotFoundError:
+            print(f"Data from post-cue delay length {delay2_length} cycles not found. Make sure models from all variants"
+                  f" of Experiment 2 have been evaluated and data saved.")
+            return
+
+        # get the cued geometry
+        _, _, theta, PVEs = delay_looper_geometry(c, all_data, 'cued')
+        all_theta.append(theta)
+        all_PVEs.append(PVEs)
+
+    all_theta = np.stack(all_theta).transpose([1, 2, 0]) # model x delay x delay2 length
+    all_PVEs = np.stack(all_PVEs).transpose([1, 2, 3, 0])  # model x delay x PC number x delay2 length
+
+    return delay2_max_length, all_theta, all_PVEs
 
 
+def model_CDI_looper(constants, cued_up_coords, cued_down_coords):
+    """
+    Calculate the CDI for all models. The steps are:
+    1) reshape the 3D coord data (into conditions: plane status x delay x location) for easier manipulation
+    2) calculate the CDI (rectangular area) for each condition
+    3) average across the cued / probed locations, and other conditions depending on the experiment
+    4) create CDI_for_plots and CDI_for_stats dataframes
+
+    :param constants: Experimental constants module.
+    :type constants: module
+    :param cued_up_coords: dictionary with 3D coordinates fitted to the data from cued_up_uncued_down trials for each
+        model. Keys correspond to the model number, and each contains a (n_conditions, 3) array.
+    :type cued_up_coords: dict
+    :param cued_down_coords: analogous dictionary with 3D coordinates fitted to the data from cued_down_uncued_up trials
+    :type cued_down_coords: dict
+    :return: CDI_for_plots, CDI_for_stats
+    """
+
+    CDI_for_plots = []
+    CDI_for_stats = []
+    for model in range(constants.PARAMS['n_models']):
+        cued_up_reshaped, cued_down_reshaped, dim_numbers = ppc.reshape_CDI_coords(constants,
+                                                                                   cued_up_coords[model],
+                                                                                   cued_down_coords[model])
+
+        CDI = get_CDI(cued_up_reshaped, cued_down_reshaped, dim_numbers)
+
+        CDI_av, CDI_df = average_CDI(constants, CDI)
+        CDI_for_plots.append(CDI_av)
+        CDI_for_stats.append(CDI_df)
+
+    CDI_for_plots = pd.concat(CDI_for_plots, ignore_index=True)
+    CDI_for_stats = pd.concat(CDI_for_stats, ignore_index=True)
+
+    return CDI_for_plots, CDI_for_stats
+
+
+#%% CDI analysis functions
 def get_CDI(cued_up_coords_reshaped, cued_down_coords_reshaped, dim_numbers):
     """
     Calculate the CDI (surface area of the quadrilateral that captures the data coordinates from a particular
@@ -375,43 +461,6 @@ def average_CDI(constants, CDI):
     return CDI_for_plots, CDI_for_stats
 
 
-def model_CDI_looper(constants, cued_up_coords, cued_down_coords):
-    """
-    Calculate the CDI for all models. The steps are:
-    1) reshape the 3D coord data (into conditions: plane status x delay x location) for easier manipulation
-    2) calculate the CDI (rectangular area) for each condition
-    3) average across the cued / probed locations, and other conditions depending on the experiment
-    4) create CDI_for_plots and CDI_for_stats dataframes
-
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param cued_up_coords: dictionary with 3D coordinates fitted to the data from cued_up_uncued_down trials for each
-        model. Keys correspond to the model number, and each contains a (n_conditions, 3) array.
-    :type cued_up_coords: dict
-    :param cued_down_coords: analogous dictionary with 3D coordinates fitted to the data from cued_down_uncued_up trials
-    :type cued_down_coords: dict
-    :return: CDI_for_plots, CDI_for_stats
-    """
-
-    CDI_for_plots = []
-    CDI_for_stats = []
-    for model in range(constants.PARAMS['n_models']):
-        cued_up_reshaped, cued_down_reshaped, dim_numbers = ppc.reshape_CDI_coords(constants,
-                                                                                   cued_up_coords[model],
-                                                                                   cued_down_coords[model])
-
-        CDI = get_CDI(cued_up_reshaped, cued_down_reshaped, dim_numbers)
-
-        CDI_av, CDI_df = average_CDI(constants, CDI)
-        CDI_for_plots.append(CDI_av)
-        CDI_for_stats.append(CDI_df)
-
-    CDI_for_plots = pd.concat(CDI_for_plots, ignore_index=True)
-    CDI_for_stats = pd.concat(CDI_for_stats, ignore_index=True)
-
-    return CDI_for_plots, CDI_for_stats
-
-
 def save_CDI_to_file(constants, CDI_for_plots, CDI_for_stats):
     """
     Save CDI data frames to file.
@@ -430,6 +479,7 @@ def save_CDI_to_file(constants, CDI_for_plots, CDI_for_stats):
     return
 
 
+#%% runner functions
 def run_CDI_analysis(constants):
     """
     Run the full CDI analysis pipeline. The steps are:
@@ -503,6 +553,27 @@ def run_cued_geom_analysis(constants, all_data):
 
     # run the theta and psi angles analysis: plot, print descriptive and inferential statistics
     angles.run_angles_analysis(constants, theta, psi, 'cued')
+
+    return
+
+
+def run_cued_geometry_experiment_2(constants):
+    """
+    Run the Cued geometry analysis for Experiment 2 (retrocue timing). Plots the pre- and post-cue angles against
+    the post-cue delay length.
+
+    :param constants: experimental constants module.
+    :type constants: module
+    """
+    # calculate the geometry for all variants of the experiment
+    delay2_max_length, all_theta, all_PVEs = experiment_2_looper(constants)
+
+    # plot the angle comparison
+    cplot.plot_angles_experiment_2(constants, delay2_max_length, all_theta)
+    # save plot
+    if constants.PLOT_PARAMS['save_plots']:
+        plt.savefig(f"{constants.PARAMS['FIG_PATH']}'compare_cued_angles.svg")
+        plt.savefig(f"{constants.PARAMS['FIG_PATH']}'compare_cued_angles.png")
 
     return
 
@@ -647,16 +718,26 @@ def run_cued_uncued_geom_analysis(constants, all_data):
 
 
 def run_full_rep_geom_analysis(constants):
-    """ Run the full representational geometry analysis. This includes:
+    """
+    Run the full representational geometry analysis. This includes:
     1) the Cued geometry (including the rotated/unrotated plane analysis for Experiments 1 and 3)
-    2) the Uncued geometry
-    3) the Cued/Uncued geometry
-    4) the CDI analysis
+    2) the Uncued geometry (for Experiments 1, 3 and 4)
+    3) the Cued/Uncued geometry (for Experiments 1, 3 and 4)
+    4) the CDI analysis (for Experiments 1, 3 and 4)
 
     See the individual geometry runners for more details about each analysis.
+
+    :param constants: experimental constants module.
+    :type constants: module
     """
 
     print('......REPRESENTATIONAL GEOMETRY ANALYSIS......')
+
+    if constants.PARAMS['experiment_number'] == 2:
+        # Experiment 2 is a special case - we need to loop through all its variants (defined by the length of the
+        # post-cue delay interval) to generate the Cued geometry comparison plot.
+        run_cued_geometry_experiment_2(constants)
+        return
 
     # get all data
     geometry_names, all_data = get_all_binned_data(constants, trial_type='valid')
