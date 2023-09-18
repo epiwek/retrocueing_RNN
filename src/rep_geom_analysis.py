@@ -10,160 +10,7 @@ import src.vec_operations as vops
 import src.preprocess_rep_geom_data as ppc
 
 
-# %% get data and labels
-
-def get_unrotated_rotated_label(constants, preprocessed_data):
-    """
-    Find the 'unrotated' and 'rotated' Cued plane labels using the training data and create a dictionary mapping them
-    to the two cue locations.
-
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param preprocessed_data: binned location-wise data from all models, split into a training and test set. For more
-        information, see the get_rotated_unrotated_data function
-    :type preprocessed_data: np.ndarray
-    :return: labels_dict
-    """
-    # fit the subspace to the training data
-    loc1_subspace = Geometry(preprocessed_data['train']['loc1'], constants)
-    loc2_subspace = Geometry(preprocessed_data['train']['loc2'], constants)
-
-    loc1_subspace.get_geometry()
-    loc2_subspace.get_geometry()
-
-    # find the unrotated plane - lesser absolute value of cosine theta between the pre- and post-cue planes
-    unrotated_plane_ix = np.argmax([np.abs(loc1_subspace.cos_theta), np.abs(loc2_subspace.cos_theta)])
-
-    # create a dictionary mapping the 'rotated' and 'unrotated' labels to each location
-    labels = ('loc1', 'loc2') if unrotated_plane_ix == 0 else ('loc2', 'loc1')
-    labels_dict = {'unrotated': labels[0], 'rotated': labels[1]}
-
-    return labels_dict
-
-
-def get_rotated_unrotated_data(constants):
-    """
-    Get the data for the rotated/unrotated Cued plane analysis, for all models. Data from each cued location is split
-    into a training and test set and saved into a numpy array of shape (n_models, ). Each entry in the array contains a
-    list of length n_cv_folds. Each list item is a dictionary with the 'train' and 'test' keys, each containing the
-    'loc1' and 'loc2' sub-keys.
-
-    For example, to access the binned data from trials where loc 1 was cued (cued_up_uncued_down trials), for model m
-    and the training dataset from cross-validation fold cv, we would call the following:
-
-    all_data[m][cv]['train']['loc1']
-
-    :param constants: Experimental constants module.
-    :type constants: module
-    :return: all_data
-    """
-    base_path = constants.PARAMS['FULL_PATH']
-    load_path = base_path + 'pca_data/valid_trials'
-    n_bins = constants.PARAMS['B']
-
-    # load test/train ixs
-    with open(f"{load_path}/trial_ixs_for_unrotrot_analysis.pckl", 'rb') as f:
-        trial_ixs = pickle.load(f)
-
-    all_data = []
-    for model in range(constants.PARAMS['n_models']):
-        # load data
-        f_name = f"{load_path}/eval_data_model{model}.pckl"
-        with open(f_name, 'rb') as f:
-            eval_data = pickle.load(f)
-
-        all_data.append(ppc.preprocess_model_data_rot_unrot(constants, eval_data, trial_ixs['train'][str(model)],
-                                                            trial_ixs['test'][str(model)], n_bins))
-
-    return np.array(all_data)
-
-
-def relabel_test_data(model_data_loc_labels, labels_dict):
-    """
-    Relabel the test data dictionary by swapping the 'loc1' and 'loc2' keys to their corresponding status ('rotated' and
-    'unrotated') labels.
-
-    :param model_data_loc_labels: data dictionary with location labels
-    :type model_data_loc_labels: dict
-    :param labels_dict: dictionary mapping the location labels onto the rotated/unrotated labels
-    :type labels_dict: dict
-    :return: model_data_rot_unrot_labels - relabelled data dictionary
-    """
-    model_data_rot_unrot_labels = {}
-    for plane_label in labels_dict.keys():
-        loc_label = labels_dict[plane_label]
-        model_data_rot_unrot_labels[plane_label] = model_data_loc_labels[loc_label]
-    return model_data_rot_unrot_labels
-
-
-def get_all_binned_data(constants, trial_type='valid', probed_unprobed=False):
-    """
-    Load binned 'pca_data' dictionaries from all models. Loaded data includes the 'cued', 'uncued',
-    'cued_up_uncued_down' and 'cued_down_uncued_up' dictionaries. Data is saved into an 'all_data' dictionary,
-    with keys corresponding to the number models. Each model sub-dictionary contains keys corresponding to the above
-    data structures. Geometry names are additionally saved into the geometry_names list.
-
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param trial_type: Optional. Pass 'valid' or 'invalid', default is 'valid'.
-    :type trial_type: str
-    :param probed_unprobed: Optional. Pass True if you want to include the 'probed' and 'unprobed' geometry data
-        (for Experiment 3). Default is False.
-    :type probed_unprobed: bool
-    :return: geometry_names: list, all_data : dictionary with data for each model and geometry
-
-    .. Note:: For example, to extract the data dictionary containing the data averaged across uncued colours and
-    binned across cued colours for model 0, we would want to access the following part of the all_data dictionary:
-        all_data[0]['cued']
-    """
-    base_path = constants.PARAMS['FULL_PATH']
-    load_path = base_path + 'pca_data/' + trial_type + '_trials/pca_data_'
-
-    all_data = {}
-    geometry_names = ['cued', 'uncued', 'cued_up_uncued_down', 'cued_down_uncued_up']
-    geometry_f_names = ['', 'uncued_', 'cued_up_uncued_down_', 'cued_down_uncued_up_']
-
-    if probed_unprobed:
-        geometry_names.extend(('probed', 'unprobed'))
-        geometry_f_names.extend(('probed_', 'unprobed_'))
-
-    for model in range(constants.PARAMS['n_models']):
-        all_data[model] = {}
-        for geometry, f_name in zip(geometry_names, geometry_f_names):
-            with open(f"{load_path}{f_name}model{model}.pckl", 'rb') as f:
-                all_data[model][geometry] = pickle.load(f)
-    return geometry_names, all_data
-
-
-def get_CDI_data(constants):
-    """
-    Load binned 'pca_data' dictionaries from all models, separately for each cued location trials (e.g.
-    cued_up_uncued_down). Data is aggregated across cued and uncued items (and valid and invalid trials where
-    appropriate) from the delay end timepoints.
-
-    :param constants: Experimental constants module.
-    :type constants: module
-    :return: cdi_data nested dictionary with model number keys, each containing the 'cued_up_uncued_down' and
-    'cued_down_uncued_up' sub-keys containing the data.
-
-    """
-    # get the data from valid and invalid trials and run the preprocessing to create two location-specific data arrays
-    if constants.PARAMS['cue_validity'] < 1:
-        # experiment 4, probabilistic conditions (cue validity < 1)
-        _, all_data_valid = get_all_binned_data(constants, trial_type='valid', probed_unprobed=True)
-        _, all_data_invalid = get_all_binned_data(constants, trial_type='invalid', probed_unprobed=True)
-
-        cdi_data = ppc.preprocess_CDI_data(constants, all_data_valid, all_data_invalid)
-    else:
-        # experiment 4, deterministic condition (cue validity = 1) and other experiments
-        is_expt_4 = constants.PARAMS['experiment_number'] == 4
-        _, all_data_valid = get_all_binned_data(constants, trial_type='valid', probed_unprobed=is_expt_4)
-        cdi_data = ppc.preprocess_CDI_data(constants, all_data_valid)
-
-    return cdi_data
-
-
-# %% define looper functions that will loop across models, delay intervals and geometries
+# %% define looper functions that will loop across models, delay intervals and experiments
 
 def model_geometry_looper(constants, all_data, geometry_name, delay_name=None):
     """
@@ -187,6 +34,9 @@ def model_geometry_looper(constants, all_data, geometry_name, delay_name=None):
     :param delay_name: Desired delay interval. Choose from: 'delay1', 'delay2' and 'delay3' (only for Experiment 4).
     :type delay_name: str
     :return: all_subspaces, all_psi, all_theta, all_PVEs
+
+    .. note:: This function mirrors the model_looper function from subsoace_alignment_index. Both could probably be
+    rewritten as decorators.
     """
     assert geometry_name in ['cued', 'uncued', 'cued_up_uncued_down', 'cued_down_uncued_up'], \
         "Incorrect geometry name, choose from : 'cued', 'uncued', 'cued_up_uncued_down' and 'cued_down_uncued_up'"
@@ -228,6 +78,9 @@ def delay_looper_geometry(constants, all_data, geometry_name):
         'cued_down_uncued_up'
     :type geometry_name: str
     :return: cued_subspaces, psi, theta, PVEs
+
+    .. note:: This function mirrors the delay_looper function from subspace_alignment_index. Both could probably be
+    rewritten as decorators.
     """
 
     # get the geometry for all delay intervals
@@ -259,7 +112,7 @@ def experiment_2_looper(constants):
     :return: all_theta (n_models, n_delays, n_delay2_lengths), all_PVES (n_models, n_delays, n_PCs, n_delay2_lengths)
     """
     assert constants.PARAMS['experiment_number'] == 2, \
-        'Function should only be used with Experiment 2 (retrocue timing)'
+        'This function should only be used with Experiment 2 (retrocue timing)'
     delay2_max_length = \
         (constants.PARAMS['trial_timings']['delay1_dur'] + constants.PARAMS['trial_timings']['delay2_dur']) // 2
 
@@ -272,7 +125,7 @@ def experiment_2_looper(constants):
 
         # get the data - make sure that all data from all variants of the experiment is saved to file.
         try:
-            _, all_data = get_all_binned_data(c, trial_type='valid')
+            _, all_data = ppc.get_all_binned_data(c, trial_type='valid')
         except FileNotFoundError:
             print(f"Data from post-cue delay length {delay2_length} cycles not found. Make sure models from all variants"
                   f" of Experiment 2 have been evaluated and data saved.")
@@ -478,6 +331,36 @@ def save_CDI_to_file(constants, CDI_for_plots, CDI_for_stats):
 
     return
 
+#%% get the rotated and unrated labels
+
+
+def get_unrotated_rotated_label(constants, preprocessed_data):
+    """
+    Find the 'unrotated' and 'rotated' Cued plane labels using the training data and create a dictionary mapping them
+    to the two cue locations.
+
+    :param constants: Experimental constants module.
+    :type constants: module
+    :param preprocessed_data: binned location-wise data from all models, split into a training and test set. For more
+        information, see the get_unrotated_rotated_data function from preprocess_rep_geom_data.py
+    :type preprocessed_data: np.ndarray
+    :return: labels_dict
+    """
+    # fit the subspace to the training data
+    loc1_subspace = Geometry(preprocessed_data['train']['loc1'], constants)
+    loc2_subspace = Geometry(preprocessed_data['train']['loc2'], constants)
+
+    loc1_subspace.get_geometry()
+    loc2_subspace.get_geometry()
+
+    # find the unrotated plane - lesser absolute value of cosine theta between the pre- and post-cue planes
+    unrotated_plane_ix = np.argmax([np.abs(loc1_subspace.cos_theta), np.abs(loc2_subspace.cos_theta)])
+
+    # create a dictionary mapping the 'unrotated' and 'rotated' labels to each location
+    labels = ('loc1', 'loc2') if unrotated_plane_ix == 0 else ('loc2', 'loc1')
+    labels_dict = {'unrotated': labels[0], 'rotated': labels[1]}
+
+    return labels_dict
 
 #%% runner functions
 def run_CDI_analysis(constants):
@@ -496,7 +379,7 @@ def run_CDI_analysis(constants):
     """
 
     # get the single-trial location arrays
-    cdi_data = get_CDI_data(constants)
+    cdi_data = ppc.get_CDI_data(constants)
 
     # fit the subspaces to get 3D coords
     cued_up_subspaces, _, _, cued_up_PVEs, cued_up_coords = model_geometry_looper(constants, cdi_data,
@@ -580,12 +463,12 @@ def run_cued_geometry_experiment_2(constants):
 
 def run_unrotated_rotated_geometry(constants):
     """
-    Run the full rotated/unrotated plane analysis for the Cued geometry. The steps are:
+    Run the full unrotated/rotated plane analysis for the Cued geometry. The steps are:
     1) split the data into cross-validation folds
     2) for each fold:
-     2.1) find the 'rotated' and 'unrotated' cued location using the training data (based on the cos of
+     2.1) find the 'unrotated' and 'rotated' cued location using the training data (based on the cos of
         theta value between the pre- and post-cue planes)
-     2.2) relabel the cued locations from test data as 'rotated' and 'unrotated'
+     2.2) relabel the cued locations from test data as 'unrotated' and 'rotated'
      2.3) calculate the theta and psi angles
     3) analyse the angles:
      3.1) rectify and average across cross-validation folds
@@ -598,11 +481,11 @@ def run_unrotated_rotated_geometry(constants):
     .. note:: This analysis is not implemented for Experiments 2 and 4, and running it for them will produce an error.
 
     """
-    if constants.PARAMS['experiment_number'] == 2 or constants.PARAMS['experiment_number'] == 4:
+    if constants.PARAMS['experiment_number'] not in [1, 3]:
         raise NotImplementedError('Unrotated / Rotated plane analysis only implemented for Experiments 1 and 3')
 
     # get the data
-    preprocessed_data = get_rotated_unrotated_data(constants)
+    preprocessed_data = ppc.get_unrotated_rotated_data(constants)
 
     n_cv_folds = preprocessed_data.shape[1]
     plane_label_keys = ['unrotated', 'rotated']
@@ -619,9 +502,9 @@ def run_unrotated_rotated_geometry(constants):
             # get the unrotated and rotated location labels
             labels_dict = get_unrotated_rotated_label(constants, data[model])
             # construct a new test dictionary with these labels (aka relabel locations)
-            test_data[model] = relabel_test_data(data[model]['test'], labels_dict)
+            test_data[model] = ppc.relabel_test_data(data[model]['test'], labels_dict)
 
-        # calculate the rotated and unrotated plane angles
+        # calculate the unrotated and rotated plane angles
         for plane_label in plane_label_keys:
             _, all_psi[plane_label][cv], \
                 all_theta[plane_label][cv], _, _ = model_geometry_looper(constants, test_data, plane_label)
@@ -653,7 +536,7 @@ def run_uncued_geom_analysis(constants, all_data):
     .. note:: This analysis is not implemented for Experiments 2 and 4, and running it for them will produce an error.
 
     """
-    if constants.PARAMS['experiment_number'] == 2 or constants.PARAMS['experiment_number'] == 4:
+    if constants.PARAMS['experiment_number'] not in [1, 3]:
         raise NotImplementedError('Cued/Uncued geometry analysis only implemented for Experiments 1 and 3.')
 
     # get the Uncued item geometry for all trained networks and delays
@@ -692,7 +575,7 @@ def run_cued_uncued_geom_analysis(constants, all_data):
 
     """
 
-    if constants.PARAMS['experiment_number'] == 2 or constants.PARAMS['experiment_number'] == 4:
+    if constants.PARAMS['experiment_number'] not in [1, 3]:
         raise NotImplementedError('Cued/Uncued geometry analysis only implemented for Experiments 1 and 3.')
 
     subspace_results = []
@@ -720,7 +603,7 @@ def run_cued_uncued_geom_analysis(constants, all_data):
 def run_full_rep_geom_analysis(constants):
     """
     Run the full representational geometry analysis. This includes:
-    1) the Cued geometry (including the rotated/unrotated plane analysis for Experiments 1 and 3)
+    1) the Cued geometry (including the unrotated/rotated plane analysis for Experiments 1 and 3)
     2) the Uncued geometry (for Experiments 1, 3 and 4)
     3) the Cued/Uncued geometry (for Experiments 1, 3 and 4)
     4) the CDI analysis (for Experiments 1, 3 and 4)
@@ -740,13 +623,13 @@ def run_full_rep_geom_analysis(constants):
         return
 
     # get all data
-    geometry_names, all_data = get_all_binned_data(constants, trial_type='valid')
+    geometry_names, all_data = ppc.get_all_binned_data(constants, trial_type='valid')
 
     # get the cued geometry
     run_cued_geom_analysis(constants, all_data)
 
-    if constants.PARAMS['experiment_number'] == 1 or constants.PARAMS['experiment_number'] == 3:
-        # run the rotated/unrotated cued plane analysis
+    if constants.PARAMS['experiment_number'] in [1, 3]:
+        # run the unrotated/rotated cued plane analysis
         run_unrotated_rotated_geometry(constants)
 
         # run the uncued geometry
@@ -755,6 +638,6 @@ def run_full_rep_geom_analysis(constants):
         # run the cued/uncued geometry
         run_cued_uncued_geom_analysis(constants, all_data)
 
-    if constants.PARAMS['experiment_number'] == 1 or constants.PARAMS['experiment_number'] == 4:
+    if constants.PARAMS['experiment_number'] in [1, 4]:
         # run the CDI analysis
         run_CDI_analysis(constants)
