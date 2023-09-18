@@ -204,6 +204,8 @@ PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
 PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'
 PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
+# common path for all experiment 2 variants - for saving plots and data structures
+PARAMS['EXPT2_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
 
 if PARAMS['experiment_number'] == 4:
     PARAMS['COND_PATH'] += f"validity_{PARAMS['cue_validity']}/5_cycles/"
