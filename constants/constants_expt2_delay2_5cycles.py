@@ -193,9 +193,9 @@ TRAINING_DATA = make_stimuli_vonMises(PARAMS,epoch='test')
 
 ## binning params for PCA analysis
 PARAMS['n_inp'] = TRAINING_DATA['inputs'].shape[-1]
-PARAMS['B'] = 4
-PARAMS['L'] = 2
-PARAMS['M'] = PARAMS['B'] * PARAMS['L']
+PARAMS['B'] = 4  # number of colour bins
+PARAMS['L'] = 2  # number of cue locations
+PARAMS['M'] = PARAMS['B'] * PARAMS['L']  # total number of bins
     
 PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 
