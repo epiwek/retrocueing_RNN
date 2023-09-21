@@ -13,13 +13,13 @@ import pickle
 import os
 from scipy.ndimage import gaussian_filter1d
 from scipy.io import savemat
-from src.generate_data_vonMises import change_cue_validity
+from src.generate_data_von_mises import change_cue_validity
 import src.helpers as helpers
-from src.generate_data_vonMises import generate_test_conditions
+from src.generate_data_von_mises import generate_test_conditions
 
 
 def seed_torch(seed=1029):
-    '''
+    """
     Set the seed for all packages to ensure reproducibility.
 
     Parameters
@@ -31,7 +31,7 @@ def seed_torch(seed=1029):
     -------
     None.
 
-    '''
+    """
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
@@ -109,11 +109,6 @@ class RNN(nn.Module):
                 # timestep without noise
                 noise = torch.zeros(hidden.size(), device=self.device)
 
-            # if i == seq_len - 1:
-            #     # last time step of the sequence
-            #     o[i,:,:], h_n = self.step(inputs[i, :, :], hidden,noise)
-            #     # h_n = self.do(h_n)
-            # else:
             h[timepoint, :, :], hidden = self.step(inputs[timepoint, :, :], hidden, noise)
 
         # pass the recurrent activation from the last timestep through the decoder layer and apply softmax
@@ -133,6 +128,7 @@ def sample_choices(outputs, params, policy='softmax'):
         output layer activation values (corresponding to the choice probabilities) from the model of interest
 
     params : dictionary
+        Experimental parameters.
 
     policy : str
         'hardmax', or 'softmax' (default)
@@ -179,10 +175,10 @@ def train_model(params, data, device):
     ----------
     params : dict
         Experiment parameters.
-    data : TYPE
-        DESCRIPTION.
-    device : TYPE
-        DESCRIPTION.
+    data : dict
+        Training data dictionary.
+    device : torch.device
+        Device no which to train the model.
 
     Raises
     ------
@@ -221,6 +217,9 @@ def train_model(params, data, device):
         optimizer = optim.RMSprop(model.parameters(), lr=params['learning_rate'])
     elif params['optim'] == 'Adam':
         optimizer = optim.Adam(model.parameters(), lr=params['learning_rate'])
+    else:
+        raise ValueError("Incorrect optimiser name. Choose from: 'SGD', 'SGDm', 'RMSprop', and 'Adam'.")
+
 
     # set the loss function
     if params['loss_fn'] == 'MSE':
@@ -249,6 +248,8 @@ def train_model(params, data, device):
 
     if params['condition'] != 'deterministic':
         invalid_trials = torch.empty((params['n_epochs'], n_invalid_trials)).to(device)
+    else:
+        invalid_trials = None
 
     if not params['from_scratch']:
         # load training structures and append to them
@@ -268,6 +269,7 @@ def train_model(params, data, device):
                            invalid_trials), 0)
         n_previous_epochs = track_training['loss_epoch'].shape[0]
 
+
     inputs_base = data['inputs']
     inputs_base = inputs_base.to(device)
 
@@ -275,8 +277,7 @@ def train_model(params, data, device):
     targets = targets.to(device)
 
     window = params['conv_criterion']['window']
-    # dLoss = torch.empty((params['n_epochs']-1-window,))
-    # loss_clean = torch.empty((params['n_epochs']-window,))
+
 
     if params['from_scratch']:
         epochs = range(params['n_epochs'])
@@ -307,7 +308,6 @@ def train_model(params, data, device):
 
         # loop over training examples
         for trial in range(params['stim_set_size']):
-            # print('Trial %d : ' %trial)
             if params['var_delays']:
                 trial_input = inputs[delay_mask[:, trial],
                               shuffling_order[trial, i], :]
@@ -316,12 +316,8 @@ def train_model(params, data, device):
 
             outputs, o, hidden = \
                 model(trial_input.unsqueeze(1))
-            # print(torch.where(o<0))
+
             if np.logical_and(trial == 0, i == 0):
-                # hidden_stats[i,:,0] = \
-                #     torch.std_mean(o,-1)[0].squeeze()
-                # hidden_stats[i,:,1] = \
-                #     torch.std_mean(o,-1)[1].squeeze()
                 print('First forward pass')
                 print('    Means:')
                 print(torch.std_mean(o, -1)[0].squeeze())
@@ -339,13 +335,10 @@ def train_model(params, data, device):
                                targets[shuffling_order[trial, i]].unsqueeze(0))
             elif params['target_type'] == 'angle_val':
                 loss = custom_MSE_loss(params, outputs, targets[shuffling_order[trial, i]])
+            else:
+                raise ValueError("Incorrect target type. Choose from 'Gaussian', 'class_label' and 'angle_val'.")
 
-            # pdb.set_trace()
             # Keep track of outputs and loss
-            # if params['l2_activity']:
-            #     #loss += params['Br']*torch.norm(torch.norm(o.squeeze(),dim=1))**2
-            #     loss += (1/(model.n_inp*params['seq_len']))*params['Br']*\
-            #         torch.sum(torch.norm(o.squeeze(),dim=1)**2)
             if params['target_type'] == 'angle_val':
                 loss_all[trial, i] = loss.detach()
             else:
@@ -364,7 +357,7 @@ def train_model(params, data, device):
             valid_ix = torch.arange(params['stim_set_size'])
 
         if len(valid_ix) != n_valid_trials:
-            ValueError('loss_valid has a wrong preallocated size!')
+            ValueError('loss_valid has a wrong pre-allocated size!')
 
         loss_valid[:, i] = loss_all[valid_ix, i]
 
@@ -523,7 +516,7 @@ def train_model(params, data, device):
 
 
 def save_model(path, params, model, track_training):
-    '''
+    """
     Save the torch model along with the training data.
 
     Parameters
@@ -541,7 +534,7 @@ def save_model(path, params, model, track_training):
     -------
     None.
 
-    '''
+    """
     # check if paths exist - if not, create them
 
     model_path = path + 'saved_models/'
@@ -564,7 +557,7 @@ def save_model(path, params, model, track_training):
 
 
 def load_model(path, params, device):
-    '''
+    """
     Load model from file.
 
     Parameters
@@ -581,7 +574,7 @@ def load_model(path, params, device):
     model : torch obj
         RNN model.
 
-    '''
+    """
 
     if device.type == 'cuda':
         model = RNN(params, device)
@@ -599,10 +592,13 @@ def load_model(path, params, device):
 
 def add_delay_keywords(data_dict, params):
     """
-    Add additional keywords to the pca_data dictionary, containing only the data from the end of each delay interval.
-    :param data_dict:
-    :param params:
-    :return:
+    Add additional keywords to the existing data dictionary data_dict. Keys correspond to the names of the delay
+    intervals, in the format 'delay{delay_number}' and contain only the data from the end timepoint of the corresponding
+    delay interval.
+
+    :param dict data_dict: Data dictionary with 'data' key, containing the data array of shape (m, n_timepoints, n)
+    :param dict params: Dictionary with Experiment parameters.
+    :return: data_dict
     """
     # Extract the end-points of the delay intervals
     d1_ix = params['trial_timepoints']['delay1_end'] - 1
@@ -618,17 +614,31 @@ def add_delay_keywords(data_dict, params):
 
 
 def get_pca_data_labels(averaged_across, trial_type, params):
+    """
+    Get the location labels for pca_data structures, in a 'labels' dictionary.
+
+    For experiments 1-3, the dictionary will contain a single 'loc' keu, containing the cued or uncued location labels,
+    depending on the condition. For experiment 4, the dictionary will contain 'cued' and 'probed' keys, containing
+    the corresponding location labels.
+
+    :param str averaged_across: Name of the item the data was averaged across. E.g., for the data containing binned
+        activation responses to the cued items, this will be the 'uncued' item. Choose from: 'uncued', 'cued',
+        'single_up', and 'single_down'.
+    :param str trial_type: Name of the trial type. Choose from 'valid' and 'invalid'.
+    :param dict params: Dictionary of Experiment parameters.
+    :return: labels: dictionary of labels
+    """
     # colour labels
     labels = {'col': np.concatenate([np.arange(params['B'])] * 2, 0)}
     # location labels
     if averaged_across == 'uncued':
         # location of the cued item
         labels['loc'] = np.zeros((params['M'],), dtype=int)
-        labels['loc'][params['B']:] = 1 # second half of trials
+        labels['loc'][params['B']:] = 1  # second half of trials
     elif averaged_across == 'cued':
         # location of the uncued item
         labels['loc'] = np.zeros((params['M'],), dtype=int)
-        labels['loc'][:params['B']] = 1 # first half of trials
+        labels['loc'][:params['B']] = 1  # first half of trials
     elif averaged_across == 'single_up':
         # location of the cued (and uncued) item
         labels['loc'] = np.zeros((params['M'],), dtype=int)
@@ -640,11 +650,11 @@ def get_pca_data_labels(averaged_across, trial_type, params):
         # create cued and probed colour labels
         if trial_type == 'valid':
             if averaged_across == 'single_up':
-                labels['cued_loc'] = np.zeros(params['B']*2,dtype=int)
-                labels['probed_loc'] = np.zeros(params['B']*2,dtype=int)
+                labels['cued_loc'] = np.zeros(params['B']*2, dtype=int)
+                labels['probed_loc'] = np.zeros(params['B']*2, dtype=int)
             elif averaged_across == 'single_down':
-                labels['cued_loc'] = np.ones(params['B']*2,dtype=int)
-                labels['probed_loc'] = np.ones(params['B']*2,dtype=int)
+                labels['cued_loc'] = np.ones(params['B']*2, dtype=int)
+                labels['probed_loc'] = np.ones(params['B']*2, dtype=int)
             else:
                 labels['cued_loc'] = np.concatenate((np.zeros((params['B'],), dtype=int),
                                                      np.ones((params['B'],), dtype=int)))
@@ -667,6 +677,18 @@ def get_pca_data_labels(averaged_across, trial_type, params):
 
 
 def format_pca_data(pca_data, averaged_across, trial_type, params):
+    """
+    Format the pca_data dictionary. Add a 'labels' key, as well as delay name keys (e.g. 'delay1'), containing the data
+    from the endpoint of the appropriate delay interval.
+
+    :param dict pca_data: Data dictionary.
+    :param str averaged_across: Name of the item the data was averaged across. E.g., for the data containing binned
+        activation responses to the cued items, this will be the 'uncued' item. Choose from: 'uncued', 'cued',
+        'single_up', and 'single_down'.
+    :param str trial_type: Name of the trial type. Choose from 'valid' and 'invalid'.
+    :param dict params: Dictionary of Experiment parameters.
+    :return: pca_data: Reformatted dictionary
+    """
     # create labels
     pca_data['labels'] = get_pca_data_labels(averaged_across, trial_type, params)
     # add delay-specific fields
@@ -677,17 +699,18 @@ def format_pca_data(pca_data, averaged_across, trial_type, params):
 
 def eval_model(model, test_data, params, save_path, trial_type='valid'):
     """
+    Evaluate model on the test dataset after freezing weights and save results to files.
 
     Parameters
     ----------
-    model : TYPE
-        DESCRIPTION.
-    test_data : TYPE
-        DESCRIPTION.
-    params : TYPE
-        DESCRIPTION.
-    save_path : TYPE
-        DESCRIPTION.
+    model : torch.object
+        Trained torch model.
+    test_data : dict
+        Test dataset.
+    params : dict
+        Experimental parameters.
+    save_path : str
+        Path for saving data.
     trial_type : str, optional
         Trial type label, relevant for experiment 3. Set to either 'valid' or 
         'invalid'. Default is valid.
@@ -704,9 +727,14 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
         DESCRIPTION.
 
     """
+    assert trial_type in ['valid', 'invalid'], "Trial type must be 'valid' or 'invalid'"
+
+    if trial_type == 'invalid':
+        assert params['cue_validity'] < 1, 'Invalid trial evaluation only implemented for probabilistic cue conditions.'
+
     model.to(torch.device('cpu'))  # put model on cpu
 
-    # % 1. Evaluate model on the test data after freezing the weights
+    # 1. Evaluate model on the test data after freezing the weights
     model.eval()
     with torch.no_grad():
         readout, hidden_all_timepoints, hidden_T = \
@@ -737,7 +765,7 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
 
     # 3. Create pca_data: dataset binned by cued colour and averaged across uncued colours Data is sorted by the cued
     # colour (probed if experiment 3) automatically when created, so no need to resort, only bin.
-    trial_data = helpers.bin_data(eval_data['data'], params)
+    trial_data = helpers.bin_data(params, eval_data['data'])
     # M = B*L - colour-bin*location combinations
     pca_data = {'dimensions': ['M', 'time', 'n_rec'],
                 'data': trial_data}
@@ -758,13 +786,13 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
     # 4. Create pca_uncued: like above, but averaged across cued colours and binned across uncued colours
     # sort and bin
     eval_data_uncued, full_sorting_ix = helpers.sort_by_uncued(eval_data, params)
-    trial_data_uncued = helpers.bin_data(eval_data_uncued['data'], params)
+    trial_data_uncued = helpers.bin_data(params, eval_data_uncued['data'])
 
     pca_data_uncued = {'dimensions': ['M', 'n_rec'],
                        'data': trial_data_uncued}
     # format the dictionary - add labels and delay-specific keywords
     pca_data_uncued = format_pca_data(pca_data_uncued, 'cued', trial_type, params)
-    # save
+    #save
     if params['experiment_number'] == 4:
         save_data(pca_data_uncued, save_path + 'pca_data_unprobed_model', params['model_number'])
         if trial_type == 'valid':
@@ -778,23 +806,56 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
 
     # 5. Create similar dictionaries for the Cued/Uncued geometry. These will contain the cued and uncued-averaged
     # data from trials where the 'up' and 'down' locations were cued, respectively.
-    pca_data_cued_up_uncued_down = {'data': torch.cat((pca_data['data'][:params['B'], :, :],
-                                                       pca_data_uncued['data'][:params['B'], :, :]))}
-    # format the dictionary - add labels and delay-specific keywords
-    pca_data_cued_up_uncued_down = format_pca_data(pca_data_cued_up_uncued_down, 'single_up', trial_type, params)
-    save_data(pca_data_cued_up_uncued_down, save_path + 'pca_data_cued_up_uncued_down_model', params['model_number'])
+    # For example, for the 'cued up' trials, the first half of rows will contain the binned activity patterns for the
+    # cued (up) items, and the other half for the uncued (down) items.
+    if trial_type == 'valid':
+        pca_data_cued_up_uncued_down = {'data': torch.cat((pca_data['data'][:params['B'], :, :],
+                                                           pca_data_uncued['data'][:params['B'], :, :]))}
+        # format the dictionary - add labels and delay-specific keywords
+        pca_data_cued_up_uncued_down = format_pca_data(pca_data_cued_up_uncued_down, 'single_up', trial_type, params)
+        save_data(pca_data_cued_up_uncued_down, save_path + 'pca_data_cued_up_uncued_down_model', params['model_number'])
 
-    pca_data_cued_down_uncued_up = {'data': torch.cat((pca_data['data'][params['B']:, :, :],
-                                                       pca_data_uncued['data'][params['B']:, :, :]))}
-    # format the dictionary - add labels and delay-specific keywords
-    pca_data_cued_down_uncued_up = format_pca_data(pca_data_cued_down_uncued_up, 'single_down', trial_type, params)
-    save_data(pca_data_cued_down_uncued_up, save_path + 'pca_data_cued_down_uncued_up_model', params['model_number'])
+        pca_data_cued_down_uncued_up = {'data': torch.cat((pca_data['data'][params['B']:, :, :],
+                                                           pca_data_uncued['data'][params['B']:, :, :]))}
+        # format the dictionary - add labels and delay-specific keywords
+        pca_data_cued_down_uncued_up = format_pca_data(pca_data_cued_down_uncued_up, 'single_down', trial_type, params)
+        save_data(pca_data_cued_down_uncued_up, save_path + 'pca_data_cued_down_uncued_up_model', params['model_number'])
+
+    else:
+        delay2_end_ix = params['trial_timepoints']['delay2_end']
+
+        # need to use different labels - pca_data corresponds to data binned by the uncued item, pca_uncued corresponds
+        # to the cued item
+        # note this data is binned according to the *cued*/*uncued* item up to the second cue / probe timepoint, and
+        # then according to the *probed*/*unprobed* item for the remaining timepoints
+
+        cued_up = torch.cat((pca_data_uncued['data'][params['B']:, :delay2_end_ix, :],
+                             pca_data['data'][params['B']:, delay2_end_ix:, :]), dim=1)
+        uncued_down = torch.cat((pca_data['data'][params['B']:, :delay2_end_ix, :],
+                                 pca_data_uncued['data'][params['B']:, delay2_end_ix:, :]), dim=1)
+
+        pca_data_cued_up_uncued_down = {'data': torch.cat((cued_up, uncued_down), dim=0)}
+        # format the dictionary - add labels and delay-specific keywords
+        pca_data_cued_up_uncued_down = format_pca_data(pca_data_cued_up_uncued_down, 'single_up', trial_type, params)
+        save_data(pca_data_cued_up_uncued_down, save_path + 'pca_data_cued_up_uncued_down_model',
+                  params['model_number'])
+
+        cued_down = torch.cat((pca_data_uncued['data'][:params['B'], :delay2_end_ix, :],
+                             pca_data['data'][:params['B'], delay2_end_ix:, :]), dim=1)
+        uncued_up = torch.cat((pca_data['data'][:params['B'], :delay2_end_ix, :],
+                                 pca_data_uncued['data'][:params['B'], delay2_end_ix:, :]), dim=1)
+
+        pca_data_cued_down_uncued_up = {'data': torch.cat((cued_down, uncued_up), dim=0)}
+        # format the dictionary - add labels and delay-specific keywords
+        pca_data_cued_down_uncued_up = format_pca_data(pca_data_cued_down_uncued_up, 'single_down', trial_type, params)
+        save_data(pca_data_cued_down_uncued_up, save_path + 'pca_data_cued_down_uncued_up_model',
+                  params['model_number'])
 
     # collate all pca data into a single dict
     pca_data_all = {'cued': pca_data,
                     'uncued': pca_data_uncued,
                     'cued_up_uncued_down': pca_data_cued_up_uncued_down,
-                    'cued_down_uncued_up': pca_data_cued_up_uncued_down}
+                    'cued_down_uncued_up': pca_data_cued_down_uncued_up}
 
     # 6. Create and save a dictionary with model outputs - for behavioural analysis.
     choices = sample_choices(readout.squeeze(), params)
@@ -817,6 +878,12 @@ def eval_model(model, test_data, params, save_path, trial_type='valid'):
 
 
 def export_behav_data_to_matlab(params):
+    """
+    Export the behavioral data to file to use in Matlab.
+
+    :param dict params: Experimental parameters.
+    :return:
+    """
     expt_key = params['expt_key']
 
     # get all test conditions and paths
@@ -837,8 +904,8 @@ def export_behav_data_to_matlab(params):
             f.close()
 
             choices.append(model_outputs['choices'])
-            probed_colour = model_outputs['labels']['probed_colour']
-            unprobed_colour = model_outputs['labels']['unprobed_colour']
+            probed_colour = model_outputs['labels']['probed_colour']  # these values are the same for all models
+            unprobed_colour = model_outputs['labels']['unprobed_colour']  # same here
 
         choices = torch.stack(choices)
 
@@ -853,7 +920,7 @@ def export_behav_data_to_matlab(params):
 
 def save_data(data, save_path, model_number=None):
     """
-    Saves specified data structures.
+    Saves specified data structures to file.
     
     Parameters
     ----------
@@ -933,30 +1000,8 @@ def add_noise(data, params, device):
     return data_noisy
 
 
-# def var_delay(delay_ix,trial_data,params,device):
-#     """
-#     Adds iid noise to the input data fed to the network. Noise is drawn from 
-#     the specified distribution, 
-#     either:
-#     """
-#     if not params['var_delays']:
-#         return;
-
-#     delay1_len = params['delay_mat'][delay_ix,0]
-#     delay2_len = params['delay_mat'][delay_ix,1]
-
-#     delay1 = torch.cat([trial_data[params['trial_timepoints']['delay1_start'],:].unsqueeze(0)]*delay1_len)
-#     delay2 = torch.cat([trial_data[params['trial_timepoints']['delay2_start'],:].unsqueeze(0)]*delay2_len)
-
-#     input_trial = torch.cat((trial_data[:params['trial_timepoints']['delay1_start'],:],
-#                              delay1,
-#                              trial_data[params['trial_timepoints']['delay1_end']:params['trial_timepoints']['delay2_start'],:],
-#                              delay2,
-#                              trial_data[params['trial_timepoints']['delay2_end']:,:]))
-#     return input_trial
-
 def var_delay_mask(delay_mat, params):
-    '''
+    """
     Generate a mask to be used with the input data to modify the delay length.
 
     Parameters
@@ -969,12 +1014,12 @@ def var_delay_mask(delay_mat, params):
     Returns
     -------
     delay_mask : array
-        Boolean mask for the input data array mnodifying the delay lengths on 
+        Boolean mask for the input data array mnodifying the delay lengths on
         each trial.
 
-    '''
+    """
     if not params['var_delays']:
-        return;
+        return
 
     delay_mask = torch.ones((params['seq_len'], params['stim_set_size']), dtype=bool)
 
@@ -991,8 +1036,8 @@ def var_delay_mask(delay_mat, params):
 
 
 def get_dLoss_dt(params, loss_vals):
-    '''
-    Calculate the derivative of the loss function wrt time. Used for finding 
+    """
+    Calculate the derivative of the loss function wrt time. Used for finding
     learning plateaus.
 
     Parameters
@@ -1002,8 +1047,8 @@ def get_dLoss_dt(params, loss_vals):
         params['conv_criterion']['smooth_sd']
     loss_vals : torch.tensor
         loss values for every epoch (averaged across all training examples).
-    
-   
+
+
     Returns
     -------
     dLoss : array
@@ -1011,7 +1056,7 @@ def get_dLoss_dt(params, loss_vals):
     loss_clean : array
         Loss values after smoothing
 
-    '''
+    """
     if len(loss_vals.shape) < 2:
         ValueError('Loss_vals can''t be a 1-dimensional array')
 
@@ -1027,8 +1072,8 @@ def get_dLoss_dt(params, loss_vals):
 
 
 def get_loss_slope(params, loss_vals):
-    '''
-    Get the slope of the loss curve over a window of trials (saved in the 
+    """
+    Get the slope of the loss curve over a window of trials (saved in the
     experiment parameters dictionary).
 
     Parameters
@@ -1043,19 +1088,19 @@ def get_loss_slope(params, loss_vals):
     slope : float
         Fitted slope value.
 
-    '''
+    """
     window = params['conv_criterion']['window']
     p = np.polyfit(np.arange(window), loss_vals, 1)
     return p[0]
 
 
 def apply_conv_criterion(params, loss_vals):
-    '''
-    Apply the convergence criterion to determine whether training should 
+    """
+    Apply the convergence criterion to determine whether training should
     conclude. Two conditions must be satisfied:
         1) slope of the training loss mus be negative and >= threshold
-        2) all of the training loss values must fall below their threshold
-    The second condition ensures that training is not stopped prematurely, at 
+        2) all the training loss values must fall below their threshold
+    The second condition ensures that training is not stopped prematurely, at
     the mid-training plateau.
 
     Parameters
@@ -1070,7 +1115,7 @@ def apply_conv_criterion(params, loss_vals):
     criterion_reached : bool
         Flag, returns True if the two convergence conditinos have been met.
 
-    '''
+    """
     # get the loss slope
     a = get_loss_slope(params, loss_vals)
 
@@ -1083,8 +1128,8 @@ def apply_conv_criterion(params, loss_vals):
 
 
 def custom_MSE_loss(params, output, target_scalar):
-    '''
-    Loss function for network training. The loss term is given by the mean 
+    """
+    Loss function for network training. The loss term is given by the mean
     squared product of the (i) difference between the target and output vectors
     and (ii) the circular distance between the output unit tuning centres and
     the cued colour value (in radians).
@@ -1100,10 +1145,10 @@ def custom_MSE_loss(params, output, target_scalar):
 
     Returns
     -------
-    loss : TYPE
-        DESCRIPTION.
+    loss : float
+        Loss value.
 
-    '''
+    """
 
     # get the 1-hot representation of the target
     target_1hot = make_target_1hot(params, target_scalar)
@@ -1116,9 +1161,9 @@ def custom_MSE_loss(params, output, target_scalar):
 
 
 def make_target_1hot(params, target_scalar):
-    '''
-    Convert a scalar target into a 1-hot vector, where the individual rows 
-    correspond to the output units (associated with different colour tuning 
+    """
+    Convert a scalar target into a 1-hot vector, where the individual rows
+    correspond to the output units (associated with different colour tuning
     peaks).
 
     Parameters
@@ -1131,10 +1176,10 @@ def make_target_1hot(params, target_scalar):
     Returns
     -------
     target_1hot : array (n_out,)
-        Target vector with a 1 at the row corresponding to the output unit with 
+        Target vector with a 1 at the row corresponding to the output unit with
         a tuning curve centered on the cued colour value.
 
-    '''
+    """
     target_1hot = torch.zeros((len(params['phi']),))
     target_1hot[torch.where(params['phi'] == target_scalar)[0]] = 1
     return target_1hot
