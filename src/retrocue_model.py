@@ -77,6 +77,9 @@ class RNN(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
 
     def step(self, input_ext, hidden, noise):
+        """
+        Run the RNN for one timestep.
+        """
         hidden = self.relu(self.inp(input_ext.unsqueeze(0)) + hidden @ self.Wrec.T + noise)
         h = hidden.clone().detach()
         # We need to detach the hidden state to be able to save it into a matrix
@@ -177,20 +180,16 @@ def train_model(params, data, device):
         Experiment parameters.
     data : dict
         Training data dictionary.
-    device : torch.device
-        Device no which to train the model.
+    device : torch.device()
+        Device on which to train the model.
 
-    Raises
-    ------
-    ValueError
-        DESCRIPTION.
 
     Returns
     -------
     model : torch object
-        DESCRIPTION.
+        Trained model.
     track_training : dict
-        DESCRIPTION.
+        Training data.
 
     """
 
@@ -220,6 +219,7 @@ def train_model(params, data, device):
         loss_fn = torch.nn.MSELoss()
     elif params['loss_fn'] == 'CEL':
         loss_fn = torch.nn.CrossEntropyLoss()
+
 
     n_valid_trials = int(params['cue_validity'] * params['stim_set_size'])
     n_invalid_trials = params['stim_set_size'] - n_valid_trials
@@ -266,6 +266,8 @@ def train_model(params, data, device):
                 var_delay_mask(params['delay_mat'][shuffling_order[:, i], :],
                                params)
             delay_mask.to(device)
+        else:
+            delay_mask = None
 
         # make some cues invalid
         if params['condition'] != 'deterministic':
@@ -279,8 +281,7 @@ def train_model(params, data, device):
         # loop over training examples
         for trial in range(params['stim_set_size']):
             if params['var_delays']:
-                trial_input = inputs[delay_mask[:, trial],
-                              shuffling_order[trial, i], :]
+                trial_input = inputs[delay_mask[:, trial], shuffling_order[trial, i], :]
             else:
                 trial_input = inputs[:, shuffling_order[trial, i], :]
 
@@ -362,9 +363,8 @@ def train_model(params, data, device):
             raise ValueError('Specify which convergence criterion to use')
 
         if criterion_reached:
-            print('Model %2d converged after %d epochs. End loss = %.5f' \
-                  % (int(params['model_number']), i + 1,
-                     loss_epoch[i]))
+            print('Model %2d converged after %d epochs. End loss = %.5f' % (int(params['model_number']), i + 1,
+                                                                            loss_epoch[i]))
             # prune preallocated tensors
             net_outputs = net_outputs[:, :, :i + 1]
             loss_all = loss_all[:, :i + 1]
@@ -375,14 +375,9 @@ def train_model(params, data, device):
             break
 
     # save training data
-    track_training = {}
-    track_training['loss'] = loss_all
-    track_training['loss_valid'] = loss_valid
-    track_training['loss_epoch'] = loss_epoch
-    track_training['shuffling_order'] = shuffling_order
-    track_training['outputs'] = net_outputs
+    track_training = {'loss': loss_all, 'loss_valid': loss_valid, 'loss_epoch': loss_epoch,
+                      'shuffling_order': shuffling_order, 'outputs': net_outputs, 'hidden_stats': hidden_stats}
     # mean and std of hidden activations on the first trial of each batch
-    track_training['hidden_stats'] = hidden_stats
     # track_training['dLoss'] = dLoss
     # track_training['loss_clean'] = loss_clean
 
@@ -550,7 +545,7 @@ def load_model(path, params, device):
         model = RNN(params, device)
         model.load_state_dict(torch.load(path + 'model' + str(params['model_number']) + '_statedict'))
     else:
-        # for some reason can no longer load models straight from file with:
+        # for some reason cannot load models straight from file with:
         # model = torch.load(path + 'model' + str(params['model_number']), map_location=torch.device('cpu'))
         # replaced with:
         model = RNN(params, device)
@@ -670,33 +665,15 @@ def format_pca_data(pca_data, averaged_across, trial_type, params):
 def eval_model(model, test_data, params, save_path, trial_type='valid'):
     """
     Evaluate model on the test dataset after freezing weights and save results to files.
-
-    Parameters
-    ----------
-    model : torch.object
-        Trained torch model.
-    test_data : dict
-        Test dataset.
-    params : dict
-        Experimental parameters.
-    save_path : str
-        Path for saving data.
-    trial_type : str, optional
-        Trial type label, relevant for experiment 3. Set to either 'valid' or 
-        'invalid'. Default is valid.
-
-    Returns
-    -------
-    eval_data : TYPE
-        DESCRIPTION.
-    pca_data : TYPE
-        DESCRIPTION.
-    rdm_data : TYPE
-        DESCRIPTION.
-    model_outputs : TYPE
-        DESCRIPTION.
-
+    :param torch.object model:  Trained pytorch model.
+    :param dict test_data: Test dataset.
+    :param dict params: Experimental parameters.
+    :param str save_path: Path for saving data.
+    :param str trial_type: Optional. Trial type label, relevant for experiment 3. Set to either 'valid' or 'invalid'.
+        Default is valid.
+    :return: eval_data, pca_data_all, model_outputs: data dictionaries
     """
+
     assert trial_type in ['valid', 'invalid'], "Trial type must be 'valid' or 'invalid'"
 
     if trial_type == 'invalid':
@@ -852,7 +829,7 @@ def export_behav_data_to_matlab(params):
     Export the behavioral data to file to use in Matlab.
 
     :param dict params: Experimental parameters.
-    :return:
+
     """
     expt_key = params['expt_key']
 
@@ -972,7 +949,7 @@ def add_noise(data, params, device):
 
 def var_delay_mask(delay_mat, params):
     """
-    Generate a mask to be used with the input data to modify the delay length.
+    Generate a mask to be used with the input data, to modify the delay length.
 
     Parameters
     ----------
@@ -984,8 +961,7 @@ def var_delay_mask(delay_mat, params):
     Returns
     -------
     delay_mask : array
-        Boolean mask for the input data array mnodifying the delay lengths on
-        each trial.
+        Boolean mask for the input data array modifying the delay lengths on each trial.
 
     """
     if not params['var_delays']:
@@ -1015,7 +991,7 @@ def get_dLoss_dt(params, loss_vals):
     params: dict
         dictionary containing the Gaussian filter s.d. in
         params['conv_criterion']['smooth_sd']
-    loss_vals : torch.tensor
+    loss_vals : torch.Tensor
         loss values for every epoch (averaged across all training examples).
 
 
@@ -1083,7 +1059,7 @@ def apply_conv_criterion(params, loss_vals):
     Returns
     -------
     criterion_reached : bool
-        Flag, returns True if the two convergence conditinos have been met.
+        Flag, returns True if the two convergence conditions have been met.
 
     """
     # get the loss slope
