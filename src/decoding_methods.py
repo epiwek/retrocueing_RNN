@@ -39,7 +39,7 @@ This file contains all decoding analysis functions, including:
     planes. Then, the analysis is repeated on the second half of the data, and 
     scores for the 'rotated' and 'unrotated' planes saved. If all models 
     consistently rotate noy one of the planes, then the 'unrotated' plane scores
-    shold be significantly higher 1) than chance (50%) and 2) than the rotated 
+    should be significantly higher 1) than chance (50%) and 2) than the rotated
     scores.
     
 
@@ -47,1051 +47,846 @@ This file contains all decoding analysis functions, including:
 import pickle
 import numpy as np
 import pandas as pd
-import time
-
-import seaborn as sns
+import itertools
 import matplotlib.pyplot as plt
-
-import helpers
-import constants_expt1 as c
-import generate_data_vonMises as dg
-
 from itertools import combinations
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-
+from scipy.stats import norm
 from mne.decoding import GeneralizingEstimator
 
-from scipy.stats import norm
+import src.helpers as helpers
+import src.generate_data_von_mises as dg
+import src.custom_plot as plotter
+from src.stats import run_contrast_single_sample, run_contrast_unpaired_samples
 
-from stats import run_contrast_single_sample,run_contrast_unpaired_samples
-import rep_geom_analysis as rg
-from get_subspace_alignment_index import get_trial_ixs, plot_AI
+# %% common low-level functions
 
 
-#%% common low-level functions
 def get_class_pairs(y):
-    '''
-    Gets all possible class pair combinations.
+    """
+    Gets all possible class (i.e., label) pairwise combinations.
 
-    Parameters
-    ----------
-    y : array (n_trials,)
-        Vector of trial-wise class labels.
-
-    Returns
-    -------
-    combos : list
-        All possible binary class combinations.
-
-    '''
+    :param numpy.ndarray y: Vector of trial-wise class labels (n_trials, ).
+    :return combos: list of all possible binary class combinations.
+    """
     classes = np.unique(y)
-    combos = list(combinations(classes,2))
+    combos = list(combinations(classes, 2))
     return combos
 
-# import pdb
-# from sklearn.model_selection import StratifiedKFold, KFold
-def lda(X,y, cv=2, n_repeats=1):
-    '''
+
+def lda(X, y, cv=2):
+    """
     Fits binary LDA classifiers to discriminate between labels in cross-validation.
 
-    Parameters
-    ----------
-    X : array (n_samples,n_features)
-        Data matrix.
-    y : array (n_samples,)
-        Trial-wise class labells.
-    cv : int, optional
-        Number of cross-validation folds. The default is 2.
-
-    Returns
-    -------
-    scores_test : array (n_classifiers,)
-        Test decoding accuracy for each LDA classifier.
-
-    '''
+    :param np.ndarray X: Data matrix, shape: (n_samples,n_features)
+    :param np.ndarray y: Trial-wise class labels, shape: (n_samples,)
+    :param int cv: Optional, number of cross-validation folds. The default is 2.
+    :return : scores_test : Array with test decoding accuracy for each LDA classifier, shape: (n_classifiers,)
+    """
     # get all possible class pairs    
-    class_combos= get_class_pairs(y)
-    scores_test = np.zeros((len(class_combos),n_repeats))
-    # pdb.set_trace()
+    class_combos = get_class_pairs(y)
+    scores_test = np.zeros((len(class_combos),))
     for i in range(len(class_combos)):
-        y1,y2 = class_combos[i] # class labels
-        
-        # find trials of the abovespecified classes
-        trial_ix = np.where(np.logical_or(y==y1,y==y2))[0]
-        
-        
+        y1, y2 = class_combos[i]  # class labels
+
+        # find trials of the above-specified classes
+        trial_ix = np.where(np.logical_or(y == y1, y == y2))[0]
+
         # make classifier pipeline
         clf = make_pipeline(StandardScaler(), LDA())
-        
+
         # fit a classifier in cross-val
-        results = cross_validate(clf,X[trial_ix,:],y[trial_ix],
+        results = cross_validate(clf, X[trial_ix, :], y[trial_ix],
                                  cv=cv,
                                  return_estimator=False)
-        
-        # skf = StratifiedKFold(n_splits=2,shuffle=False)
-        # # skf.get_n_splits(X[trial_ix,:],y[trial_ix])
-        # for i, (train_index, test_index) in enumerate(skf.split(X[trial_ix,:],y[trial_ix])):
-        #     print(f"Fold {i}:")
-        #     print(f"  Train: index={train_index}")
-        #     print(f"  Test:  index={test_index}")
-            
-        #     clf = make_pipeline(StandardScaler(), LDA())
-        #     # fit classifier
-        #     clf.fit(X[trial_ix,:][train_index,:],y[trial_ix][train_index])
-        #     # test classifier
-        #     clf.score(X[trial_ix,:][test_index,:],y[trial_ix][test_index])
-        
-        # test_class_freqs(y,y_unbinned,y_undecoded,train_index,test_index)
-        # print(results['test_score'])
+
         # average test scores across cv folds
         scores_test[i] = results['test_score'].mean()
-    
-    return scores_test     
+
+    return scores_test
 
 
-def test_class_freqs(y_decoded_binned,y_decoded_unbinned,y_undecoded,train_index,test_index):
-    # count class freqs - should be 50/50
-    
-    c1 = y_decoded_binned[train_index].mean() == np.unique(y_decoded_binned[train_index]).mean()
-    c2 = y_decoded_binned[test_index].mean() == np.unique(y_decoded_binned[test_index]).mean()
-    print(f'are the class freqs equal for both train and test trials? {c1,c2}')
-    
-    # subclasses
-    counts1,counts2 = [],[]
-    for i in np.unique(y_decoded_unbinned):
-        counts1.append(len(np.where(y_decoded_unbinned[train_index]==i)[0]))
-        counts2.append(len(np.where(y_decoded_unbinned[test_index]==i)[0]))
-    print('Are the subclass counts equal for both train and test trials?')
-    print(f'    Train={counts1}')
-    print(f'    Test={counts2}')
-    
-    # undecoded colours
-    counts1,counts2 = [],[]
-    for i in np.unique(y_undecoded):
-        counts1.append(len(np.where(y_undecoded[train_index]==i)[0]))
-        counts2.append(len(np.where(y_undecoded[test_index]==i)[0]))    
-    print('Are the undecoded class counts equal for both train and test trials?')
-    print(f'    Train={counts1}')
-    print(f'    Test={counts2}')
+def lda_cg(X1, y1, X2, y2, cv=2):
+    """
+    Fits binary LDA classifiers to discriminate between labels to one dataset and tests performance on 1) a held-out
+    portion of the same dataset and 2) another dataset (cross-generalisation performance).
 
-# subclass1 = np.unique(y_unbinned[trial_ix])[3]
-# subclass1_ix = np.where(y_unbinned[trial_ix]==subclass1)[0]
+    :param np.ndarray X1: Data matrix for dataset 1, (n_samples,n_features).
+    :param np.ndarray y1: Trial-wise class labels for dataset 1, (n_samples,).
+    :param np.ndarray X2: Data matrix for dataset 2, (n_samples,n_features).
+    :param np.ndarray y2: Trial-wise class labels for dataset 2, (n_samples,).
+    :param int cv: Optional, number of cross-validation folds. The default is 2.
 
-# train_index = np.setdiff1d(train_index,subclass1_ix)
+    :return:
+        scores_test: Test decoding accuracy for each LDA classifier on the withheld part of the training dataset, shape:
+            (n_classifiers, ).
+        scores_cg: Test decoding accuracy for each LDA classifier on the generalisation dataset, (n_classifiers, ).
 
-
-def lda_cg(X1,y1,X2,y2,cv=2):
-    '''
-    Fits binary LDA classifiers to discriminate between labels to one dataset
-    and tests performance on 1) a held-out portion of the same dataset and 
-    2) another dataset (cross-generalisation performance).
-
-    Parameters
-    ----------
-    X1 : array (n_samples,n_features)
-        Data matrix for dataset 1.
-    y1 : array (n_samples,)
-        Trial-wise class labels for dataset 1.
-    X2 : array (n_samples,n_features)
-        Data matrix for dataset 2.
-    y2 : array (n_samples,)
-        Trial-wise class labels for dataset 2.
-    cv : int, optional
-        Number of cross-validation folds. The default is 2.
-
-    Returns
-    -------
-    scores_test : array (n_classifiers,2)
-        Test decoding accuracy for each LDA classifier.
-
-    '''
+    """
     # get all possible class pair combinations    
     class_combos = get_class_pairs(y1)
-    scores_test = np.zeros((len(class_combos),2)) # (n_classifiers,n_datasets)
-    scores_cg = np.zeros((len(class_combos),2))
+    scores_test = np.zeros((len(class_combos), 2))  # (n_classifiers,n_datasets)
+    scores_cg = np.zeros((len(class_combos), 2))
     for i in range(len(class_combos)):
-        l1,l2 = class_combos[i] # pair of class labels
-        
+        l1, l2 = class_combos[i]  # pair of class labels
+
         # find trials of the above-specified classes
-        trial_ix_y1 = np.where(np.logical_or(y1==l1,y1==l2))[0]
-        trial_ix_y2 = np.where(np.logical_or(y2==l1,y2==l2))[0]
-        
+        trial_ix_y1 = np.where(np.logical_or(y1 == l1, y1 == l2))[0]
+        trial_ix_y2 = np.where(np.logical_or(y2 == l1, y2 == l2))[0]
+
         # make classifier pipelines
         clf1 = make_pipeline(StandardScaler(), LDA())
         clf2 = make_pipeline(StandardScaler(), LDA())
-        
+
         # fit classifiers in cross-val
         results1 = cross_validate(clf1,
-                                 X1[trial_ix_y1,:],
-                                 y1[trial_ix_y1],
-                                 cv=cv,
-                                 return_estimator=True)
+                                  X1[trial_ix_y1, :],
+                                  y1[trial_ix_y1],
+                                  cv=cv,
+                                  return_estimator=True)
         results2 = cross_validate(clf2,
-                                 X2[trial_ix_y2,:],
-                                 y2[trial_ix_y2],
-                                 cv=cv,
-                                 return_estimator=True)
-        
+                                  X2[trial_ix_y2, :],
+                                  y2[trial_ix_y2],
+                                  cv=cv,
+                                  return_estimator=True)
+
         # average test scores across cv folds
-        scores_test[i,0] = results1['test_score'].mean()
-        scores_test[i,1] = results2['test_score'].mean()
-        
+        scores_test[i, 0] = results1['test_score'].mean()
+        scores_test[i, 1] = results2['test_score'].mean()
+
         # calculate cross-generalisation performance
-        scores_cg[i,0] = np.mean([results1['estimator'][i].score(X2[trial_ix_y2,:],y2[trial_ix_y2]) for i in range(cv)])
-        scores_cg[i,1] = np.mean([results2['estimator'][i].score(X1[trial_ix_y1,:],y1[trial_ix_y1]) for i in range(cv)])
-    
+        scores_cg[i, 0] = np.mean(
+            [results1['estimator'][i].score(X2[trial_ix_y2, :], y2[trial_ix_y2]) for i in range(cv)])
+        scores_cg[i, 1] = np.mean(
+            [results2['estimator'][i].score(X1[trial_ix_y1, :], y1[trial_ix_y1]) for i in range(cv)])
+
     return scores_test.mean(-1), scores_cg.mean(-1)
 
 
-def lda_cg_time(X,y):
-    '''
-    Test LDA classifiers to discriminate between pairs of classes based on data
-    from a single timepoint and test their performance on all the other 
-    timepoints.
+def lda_cg_time(X, y):
+    """
+    Test LDA classifiers to discriminate between pairs of classes based on data from a single timepoint and test their
+    performance on all the other timepoints.
 
-    Parameters
-    ----------
-    X : array (n_trials,n_neurons,n_timepoints)
-        Data matrix.
-    y : array (n_trials,)
-        Labels vector.
-
-    Returns
-    -------
-    test_scores: array (n_timepoints,n_timepoints)
-        Cross-temporal generalisation scores.
-    clfs : dict
-        Fitted binary LDA classifiers.
-
-    '''
+    :param np.ndarray X: Data matrix, shape: (n_samples,n_features)
+    :param np.ndarray y: Trial-wise class labels, shape: (n_samples,)
+    :return: test_scores: Cross-temporal generalisation scores array (n_timepoints,n_timepoints)
+    :rtype: np.ndarray
+    """
     # split data and labels into train and test sets
-    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=.2,random_state=0)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2, random_state=0)
     time = X.shape[-1]
     # get all possible class1-class2 combinations for binary discriminations
-    class_combos= get_class_pairs(y)
-    clfs = {} # classifiers
-    scores_Xtest = np.empty((len(class_combos),time,time))
+    class_combos = get_class_pairs(y)
+    clfs = {}  # classifiers
+    scores_Xtest = np.empty((len(class_combos), time, time))
     # loop over class pairs
     for i in range(len(class_combos)):
-        y1,y2 = class_combos[i] # class labels
-        
+        y1, y2 = class_combos[i]  # class labels
+
         # find trials of above-specified classes
-        train_ix = np.where(np.logical_or(y_train==y1,y_train==y2))[0]
-        test_ix = np.where(np.logical_or(y_test==y1,y_test==y2))[0]
-        
+        train_ix = np.where(np.logical_or(y_train == y1, y_train == y2))[0]
+        test_ix = np.where(np.logical_or(y_test == y1, y_test == y2))[0]
+
         # make classifier pipeline
         clf = make_pipeline(StandardScaler(), LDA())
         time_gen = GeneralizingEstimator(clf)
-    
+
         # fit the classifier
-        clfs[str(i)] = time_gen.fit(X=X_train[train_ix,:,:],y=y_train[train_ix])
-        
+        clfs[str(i)] = time_gen.fit(X=X_train[train_ix, :, :], y=y_train[train_ix])
+
         # test performance on with-held data, all timepoints
-        scores_Xtest[i,:,:] = time_gen.score(X=X_test[test_ix,:,:],y=y_test[test_ix])
-        
-    return np.mean(scores_Xtest,0), clfs
-#%% 1) decode uncued in post-cue - is the information still there?
+        scores_Xtest[i, :, :] = time_gen.score(X=X_test[test_ix, :, :], y=y_test[test_ix])
 
-def get_decoding_within_plane(constants,which_delay,trial_type='valid'):
-    '''
-    Train and test LDA binary classifiers to discriminate between pairs of 
-     colour labels in the pre or post-cue delay (at the last time-point). For 
-     the post-cue and post-probe delays, decoding is done for the uncued 
-     colours only.
+    return scores_Xtest.mean(0)
 
-    Parameters
-    ----------
-    constants : dict
-        Dictionary containing the constants for the experiment.
-    which_delay : str
-        Name of the memory delay to extract the data from. Pass 'precue', 
-        'postcue' or 'postprobe'.
-    trial_type : str, optional
-        Optional. Relevant for the probabilistic paradigm (experiment 3). Pass 
-        'valid' or 'invalid'. The default is 'valid'.
 
-    Returns
-    -------
-    model_scores : array
-        Average test decoding acuracy scores for all models.
+def load_model_data(constants, model_number, trial_type='valid', binned=False):
+    """
+    Load the evaluation data file for a given model.
 
-    '''
-    load_path = constants.PARAMS['FULL_PATH']+'pca_data/' + trial_type + '_trials/'
-    model_scores = np.empty((constants.PARAMS['n_models'],))
-    
-    if which_delay == 'precue':
-        delay_ix = constants.PARAMS['trial_timepoints']['delay1_end']-1
-        fname_str = 'precue'
-    elif which_delay == 'postcue':
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param int model_number: Number of the model for which to load the dataset.
+    :param str trial_type: Optional. Relevant for the probabilistic paradigm (experiment 4). Pass 'valid' or 'invalid'.
+        The default is 'valid'.
+    :param bool binned: Optional. If True, load data binned into constants.PARAMS['B'] colour bins (i.e., the 'pca_data'
+        structure). Default is False.
+    :return:
+    """
+    # load eval data for a single model
+    load_path = f"{constants.PARAMS['FULL_PATH']}pca_data/{trial_type}_trials/"
+
+    if binned:
+        # load pca data
+        file_path = f"{load_path}/pca_data_model{model_number}.pckl"
+    else:
+        # load evaluation data
+        file_path = f"{load_path}/eval_data_model{model_number}.pckl"
+
+    with open(file_path, 'rb') as f:
+        model_data = pickle.load(f)
+
+    return model_data
+
+
+def get_delay_index(constants, delay_name):
+    """
+    Get the index of the datapoint corresponding to a given delay name.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param str delay_name: Name of the required delay. Choose from: 'precue', 'postcue' and 'postprobe'
+    :return: delay_ix: index of the endpoint of the delay
+    """
+    if delay_name == 'precue':
+        delay_ix = constants.PARAMS['trial_timepoints']['delay1_end'] - 1
+    elif delay_name == 'postcue':
         # post-cue delay (uncued colours)
-        delay_ix = constants.PARAMS['trial_timepoints']['delay2_end']-1
-        fname_str = 'uncued_postcue'
-    elif which_delay == 'postprobe':
-        delay_ix = constants.PARAMS['trial_timepoints']['delay3_end']-1
-        fname_str = 'unprobed_postprobe'
-        
-    for model in range(constants.PARAMS['n_models']):
-        # load data
-        model_number = str(model)
-        print('Model '+ model_number +'/' + str(constants.PARAMS['n_models']))
-        f = open(load_path+'/eval_data_model' + model_number + '.pckl', 'rb')
-        eval_data = pickle.load(f)    
-        f.close()
-        
-        n_trials = eval_data['data'].shape[0]
-        
-        # get the uncued colour labels
-        labels_uncued = np.concatenate((eval_data["labels"]["c2"][:n_trials//2],
-                                  eval_data["labels"]["c1"][n_trials//2:]))
-        # bin the labels into B colour bins
-        labels_uncued_binned = helpers.bin_labels(labels_uncued,constants.PARAMS['B'])
-        # split the labels according to the cued location
-        loc1_labels = labels_uncued_binned[:n_trials//2]
-        loc2_labels = labels_uncued_binned[n_trials//2:]
-        
-        delayloc1 = eval_data['data'][:n_trials//2,delay_ix,:]
-        delayloc2 = eval_data['data'][n_trials//2:,delay_ix,:]
-        
-        # shuffle trials
-        rng = np.random.default_rng(seed=model)
-        
-        trial_order1 = rng.permutation(n_trials//2)
-        trial_order2 = rng.permutation(n_trials//2)
-        
-        delayloc1 = delayloc1[trial_order1,:]
-        delayloc2 = delayloc2[trial_order2,:]
-        loc1_labels = loc1_labels[trial_order1]
-        loc2_labels = loc2_labels[trial_order2]
-        
-        # train and test LDA classifiers
-        scores_loc1 = lda(delayloc1,loc1_labels)
-        scores_loc2 = lda(delayloc2,loc2_labels)
-        
-        # save LDA model test scores
-        model_scores[model] = np.stack((scores_loc1,scores_loc2)).mean()
-    # save to file 
-    pickle.dump(model_scores,open(load_path+'/decoding_acc_'+fname_str+'_delay.pckl','wb'))
+        delay_ix = constants.PARAMS['trial_timepoints']['delay2_end'] - 1
+    elif delay_name == 'postprobe':
+        delay_ix = constants.PARAMS['trial_timepoints']['delay3_end'] - 1
+    else:
+        raise ValueError("Invalid delay name. Choose from: 'precue', 'postcue' and 'postprobe'")
+    return delay_ix
+
+
+def extract_delay_data(delay_ix, eval_data):
+    """
+    Extract the data corresponding to the required timepoint(s).
+
+    :param int or list delay_ix:
+    :param dict eval_data: Data dictionary. Must contain a key 'data' with a data array of shape (m, n_timepoints, n)
+    :return: delay_data: Data array containing the subset of the data corresponding to the required trial timepoint(s),
+        shape: (m, len(delay_ix), n)
+    """
+    delay_data = eval_data['data'][:, delay_ix, :]
+    return delay_data
+
+
+def get_colour_labels(constants, eval_data, item_status='cued', trial_type='valid'):
+    """
+    Extract colour labels for a given dataset. Labels are binned into constants.PARAMS['B'] colour bins.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param dict eval_data: Data dictionary. Must contain 'data' and 'labels' keys. The data array under 'data' should
+        be of the following shape: (n_trials, n_timepoints, n_neurons). The 'labels' key should contain a sub-dictionary
+        with 'c1' and 'c2' keys, containing arrays with the colour 1 and colour 2 values for each trial, respectively.
+    :param str item_status: Which item to run the decoding analysis for, choose from 'cued', 'uncued', 'probed', and
+        'unprobed'.
+    :param str trial_type: Optional. Relevant for the probabilistic paradigm (experiment 4). Pass 'valid' or 'invalid'.
+        The default is 'valid'.
+    :return: labels_binned: array of trial-wise colour labels, binned into constants.PARAMS['B'] colour bins.
+
+    .. note :: Currently only implemented for 'valid' trials, passing trial_type='invalid' will produce an error.
+    """
+    assert item_status in ['cued', 'uncued', 'probed', 'unprobed'], \
+        "Incorrect item status. Choose from 'uncued', 'cued', 'probed', and 'unprobed'."
+    assert trial_type == 'valid', 'Incorrect trial type. Analysis only implemented for valid trials.'
+    # get the labels
+    n_trials = eval_data['data'].shape[0]
+    if item_status in ['uncued', 'unprobed']:
+        labels = np.concatenate((eval_data["labels"]["c2"][:n_trials // 2],
+                                 eval_data["labels"]["c1"][n_trials // 2:]))
+    else :
+        # 'probed', 'cued'
+        labels = np.concatenate((eval_data['labels']['c1'][:n_trials // 2],
+                                 eval_data['labels']['c2'][n_trials // 2:]), 0)
+
+    # Note - if you want to extend the functionality to invalid trials, extend the if statement above to take
+    # conjunctions of trial_type and item_status to determine the labels.
+
+    # bin the labels into B colour bins
+    labels_binned = helpers.bin_labels(labels, constants.PARAMS['B'])
+
+    return labels_binned
+
+
+def split_into_location_data(constants, labels, delay_data):
+    """
+    Split the data and labels arrays into subsets, according to the location of the cued item.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param labels: Labels array, shape (n_trials, )
+    :param np.ndarray delay_data: Data array containing the subset of the data corresponding to the required trial
+        timepoint(s), shape: (n_trials, len(delay_ix), n_neurons) or (n_trials, n_neurons)
+    :return: labels_split, data_split: arrays with the data split into location subsets, shape:
+        (n_locations, n_trials_per_location) and (n_locations, n_trials_per_location, n_neurons)
+    """
+    # split the labels according to the cued location
+    n_trials = labels.shape[0]
+    if constants.PARAMS['L'] is not 2:
+        raise ValueError('The split_ix below will not work for n_locations other than 2.')
+
+    split_ix = n_trials // constants.PARAMS['L']
+    ixs = [np.arange(split_ix), np.arange(split_ix, n_trials)]
+
+    # Note - this could be rewritten by reshaping the original arrays
+    labels_split, data_split = [], []
+    for ix in ixs:
+        labels_split.append(labels[ix])
+        data_split.append(delay_data[ix, :])
+
+    labels_split = np.stack(labels_split)
+    data_split = np.stack(data_split)
+    return labels_split, data_split
+
+
+def shuffle_trials(model_number, labels, data):
+    """
+    Shuffle the trials in data and labels arrays.
+
+    :param int model_number: Number of the model, used as seed to the random number generator for reproducibility.
+    :param numpy.ndarray labels: Labels array, shape: (n_locations, n_trials_per_location)
+    :param numpy.ndarray data: Data array, shape: (n_locations, n_trials_per_location, n_neurons)
+    :return: labels_shuffled, data_shuffled: lists of length n_locations with the shuffled data and labels arrays
+    """
+    n_trials_per_loc = labels.shape[1]
+    # shuffle trials for the decoder
+    rng = np.random.default_rng(seed=model_number)
+    trial_order = [rng.permutation(n_trials_per_loc), rng.permutation(n_trials_per_loc)]
+    labels_shuffled, data_shuffled = [], []
+    for i, shuffled_ixs in enumerate(trial_order):
+        labels_shuffled.append(labels[i, shuffled_ixs])
+        data_shuffled.append(data[i, shuffled_ixs, :])
+
+    return labels_shuffled, data_shuffled
+
+
+def model_looper(constants, delay_name, pipeline_func, item_status, trial_type='valid', **kwargs):
+    """
+    Run the decoding pipeline for all models and collect the test scores into an array.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param str or int or list delay_name: Desired delay interval. Depending on the pipeline function being used, either
+        pass a delay name (precue', 'postcue' or 'postprobe'), or a delay timepoint index / list of indices.
+    :param func pipeline_func: A function that implements a whole decoding analysis for a single model. The steps are:
+        get the data, split into locations, shuffle trials and fit/test the decoders.
+    :param str item_status: Which item to run the decoding analysis for, choose from 'cued', 'uncued', 'probed', and
+        'unprobed'.
+    :param str trial_type: Type of trials for which to run the decoder. Choose from 'valid' and 'invalid'
+    :param kwargs: any additional parameters to pass to the pipeline_func
+    :return:
+    """
+    model_scores = []
+
+    for model_number in range(constants.PARAMS['n_models']):
+        print(f"Model {model_number}/{constants.PARAMS['n_models']}")
+        model_scores.append(pipeline_func(constants, model_number, delay_name, item_status, trial_type, **kwargs))
+    #     pickle.dump(model_scores, open(load_path + '/decoding_acc_' + fname_str + '_delay.pckl', 'wb'))
+
+    model_scores = np.stack(model_scores)
     return model_scores
 
 
-def run_decoding_uncued_analysis(constants):
-    '''
-    Runs the entire uncued colour decoding analysis. LDA classifiers trained 
-    and tested in the post-cue delay.
+def get_decoding_within_plane(constants, data_shuffled, labels_shuffled):
+    """
+    Train and test LDA binary classifiers to discriminate between pairs of  colour labels from a single item location
+    and timepoint.
 
-    Parameters
-    ----------
-    constants : dict
-        Dictionary containing the constants for the experiment.
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param list data_shuffled: List containing the location-specific datasets for fitting and testing the decoders.
+    :param list labels_shuffled: List containing the location-specific labels for fitting and testing the decoders.
+    :return: model_scores : Array of average test decoding accuracy scores for all models (n_models, )
+    """
 
-    Returns
-    -------
-    None.
+    n_locs = constants.PARAMS['L']
+    scores = []
+    for loc in range(n_locs):
+        # train and test LDA classifiers
+        scores.append(lda(data_shuffled[loc], labels_shuffled[loc]))
+    # save LDA model test scores
+    model_scores = np.stack(scores).mean()
+    # save to file
+    return model_scores
 
-    '''
-    print('Run the uncued colour decoding analysis')
+
+def get_decoding_across_planes(constants, data_shuffled, labels_shuffled):
+    """
+    Train LDA binary classifiers to discriminate between pairs of colour labels from a single item location (and
+    timepoint), and test the performance on the corresponding data from the other item location.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param list data_shuffled: List containing the location-specific datasets for fitting and testing the decoders.
+    :param list labels_shuffled: List containing the location-specific labels for fitting and testing the decoders.
+    :return : model_scores - average test and generalisation decoding accuracies
+    """
+
+    n_locs = constants.PARAMS['L']
+    model_scores = []
+    # loop through all possible combinations of the locations (for two locations, there will be just one possibility)
+    for (loc1, loc2) in itertools.combinations(range(n_locs), 2):
+        # get the data and labels for the first location from the pair
+        X1, y1 = data_shuffled[loc1], labels_shuffled[loc1]
+        # repeat for the second pair
+        X2, y2 = data_shuffled[loc2], labels_shuffled[loc2]
+
+        # train LDA classifiers on one of the locations and test performance on the other, and vice versa
+        scores_test, scores_cg = lda_cg(X1, y1, X2, y2, cv=2)  # shape = (n_classifiers, )
+        model_scores.append([scores_test.mean(), scores_cg.mean()])  # average across all fitted binary classifiers
+    model_scores = np.stack(model_scores).mean(0)  # average across location combinations to produce a single score
+    return model_scores
+
+
+def run_decoding_pipeline_single_model(constants, model_number, delay_name, item_status, trial_type='valid', cg=False):
+    """
+    Run the full decoding pipeline for a single model. Steps include: loading the data, constructing the colour labels,
+    splitting the dataset into location arrays, shuffling trials and fitting and testing binary decoders.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param int model_number: Number of the model for which to run the analysis pipeline.
+    :param str delay_name: Desired delay interval. Choose from: 'precue', 'postcue' and 'postprobe' (only for Experiment
+        4).
+    :param str item_status: Which item to run the decoding analysis for, choose from 'cued', 'uncued', 'probed', and
+        'unprobed'.
+    :param str trial_type: Optional. Type of trials for which to run the analysis. Choose from 'valid' and 'invalid'.
+        Default is 'valid'.
+    :param bool cg: Optional. If True, runs a cross-generalising decoder (i.e. fits the decoder to the dataset
+        corresponding to one condition (location), and tests it on a different condition. Default is False, which fits
+        and tests the decoder on a dataset corresponding to a single condition (testing is done on withheld trials).
+    :return: model_scores: array with decoder test scores for the given model.
+    """
+    # get data
+    eval_data = load_model_data(constants, model_number, trial_type)
+
+    # create labels
+    labels_binned = get_colour_labels(constants, eval_data, item_status)
+
+    # extract delay data
+    delay_ix = get_delay_index(constants, delay_name)
+    delay_data = extract_delay_data(delay_ix, eval_data)
+
+    # split datasets by the cue location and shuffle trials
+    labels, data = split_into_location_data(constants, labels_binned, delay_data)
+    labels_shuffled, data_shuffled = shuffle_trials(model_number, labels, data)
+
+    # fit decoders
+    if cg:
+        # fit a cross-generalising decoder (train on one location and test on the other)
+        model_scores = get_decoding_across_planes(constants, data_shuffled, labels_shuffled)
+    else:
+        # fit a standard decoder - train and test on a single location (test on withheld trials)
+        model_scores = get_decoding_within_plane(constants, data_shuffled, labels_shuffled)
+
+    return model_scores
+# %% 1) decode uncued colour items in post-cue delay - is the information still there?
+
+
+def run_decoding_uncued_analysis(constants, trial_type='valid'):
+    """
+    Runs the entire uncued colour decoding analysis. LDA classifiers trained and tested in the post-cue delay.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param str trial_type: Optional. Relevant for the probabilistic paradigm (experiment 4). Pass 'valid' or 'invalid'.
+        The default is 'valid'.
+    """
+    print('Run the uncued colour decoding analysis for the post-cue delay')
     # get decoding test scores
-    model_scores = get_decoding_within_plane(constants,which_delay='postcue')
-    
-    # run constrast - test against chance
+    model_scores = model_looper(constants, 'postcue', run_decoding_pipeline_single_model, 'uncued', trial_type)
+
+    # save to file
+    # save_path = f"{constants.PARAMS['FULL_PATH']}pca_data/{trial_type}_trials/"
+    # with open(f"{save_path}decoding_acc_uncued_postcue_delay.pckl", 'wb') as f:
+    #     pickle.dump(model_scores, f)
+
+    # run contrast - test against chance decoding (50%)
     print('...Run contrast: mean test decoding significantly greater than chance (0.5) ')
-    run_contrast_single_sample(model_scores, 0.5)
-    
-    print('...Mean decoding accuracy: %.4f' %model_scores.mean())
+    run_contrast_single_sample(model_scores, [0.5])
 
-#%% 2: cross-temporal decoding
-
-def fit_and_plot_ctg(constants,tmin,tmax,custom_path=[]):
-    '''
-    Trains binary LDA classifiers to discriminate between cued colours based 
-    on the data from one timepoint and tests their performance on all the other
-    timepoints. Plots the ctg matrix averaged across all models, with trial
-    even boundaries demarcated by black horizontal and vertical lines.
-
-    Parameters
-    ----------
-    constants : dict
-        Dictionary containing the constants for the experiment.
-    tmin : int
-        Lower bound of the time interval to be used by the ctg classifier.
-    tmax : int
-        Upper bound of the time interval to be used by the ctg classifier.
-
-    Returns
-    -------
-    scores : array (n_timepoints,n_timepoints,n_modes)
-        Cross-temporal generalisation scores for all timepoints and models.
-    scores_grand_av : array (n_timepoints,n_timepoints)
-        Cross-temporal generalisation scores averaged across all models.
-
-    '''
-    if len(custom_path) != 0:
-        load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials' + custom_path
-    else:
-        load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials'
-    n_models = constants.PARAMS['n_models']
-
-    delta_t = tmax-tmin
-    scores = np.empty((delta_t,delta_t,3,n_models)) #(time,time,[loc1,loc2,average],model)
-    # pdb.set_trace()
-    start_time = time.time()
-    
-    n_colours = constants.PARAMS['B']
-    # FIT
-    for model in range(n_models):
-        
-        print('Model %d' %model)
-        model_number = str(model)
-        
-        # load eval data
-        f = open(load_path+'/eval_data_model' + model_number + '.pckl', 'rb')
-        obj = pickle.load(f)
-        data = obj["data"]
-        f.close()
-        
-        data = data.permute(0,-1,1) # trial x n_rec x time
-        n_trials = data.shape[0]
-        
-        labels_cued = np.concatenate((obj['labels']['c1'][:n_trials//2],
-                                 obj['labels']['c2'][n_trials//2:]),0)
-        
-        labels_binned = helpers.bin_labels(labels_cued,n_colours)
-        
-        X1 = data[:n_trials//2,:,tmin:tmax]
-        y1 = labels_binned[:n_trials//2] # loc 1 cued
-        
-        X2 = data[n_trials//2:,:,tmin:tmax]
-        y2 = labels_binned[n_trials//2:] # loc 2 cued
-        
-        # shuffle trials
-        rng = np.random.default_rng(seed=model)
-        
-        trial_order1 = rng.permutation(n_trials//2)
-        trial_order2 = rng.permutation(n_trials//2)
-        
-        X1 = X1[trial_order1,:,:]
-        y1 = y1[trial_order1]
-        X2 = X2[trial_order2,:,:]
-        y2 = y2[trial_order2]
-        
-        scores[:,:,0,model],clf = lda_cg_time(X1,y1)
-        scores[:,:,1,model],clf = lda_cg_time(X2,y2)
-        scores[:,:,2,model] = np.mean(scores[:,:,:2,model],2)
-        
-        
-    
-    # save scores
-    scores_struct = {'scores':scores,
-                     'dims':['training_time','testing_time','loc1loc2av','model']}
-    pickle.dump(scores_struct,open(load_path+'/ctg_scores.pckl','wb'))
-
-    # PLOT grand average
-
-    scores_grand_av = np.mean(scores[:,:,2,:],-1)
-    
-    
-    plt.figure()
-    plt.imshow(scores_grand_av,origin='lower',cmap='RdBu_r',vmin=0, vmax=1.)
-    plt.colorbar()
-    
-    plt.axhline(.5, color='k')
-    plt.axvline(.5, color='k')
-    
-    if delta_t == constants.PARAMS['seq_len']:
-        # all timepoints
-        
-        plt.axhline(constants.PARAMS['trial_timepoints']['delay1_end']-.5, color='k')
-        plt.axvline(constants.PARAMS['trial_timepoints']['delay1_end']-.5, color='k')
-        
-        plt.axhline(constants.PARAMS['trial_timepoints']['delay2_start']-.5, color='k')
-        plt.axvline(constants.PARAMS['trial_timepoints']['delay2_start']-.5, color='k')
-        
-        # plt.xticks(range(delta_t),labels=np.arange(delta_t)+1)
-        # plt.yticks(range(delta_t),labels=np.arange(delta_t)+1)
-        plt.xticks(np.arange(0,delta_t,5),labels=np.arange(0,delta_t,5)+1)
-        plt.yticks(np.arange(0,delta_t,5),labels=np.arange(0,delta_t,5)+1)
-        
-    else:
-        plt.xticks(range(delta_t), labels=range(-1,delta_t-1))
-        plt.yticks(range(delta_t), labels=range(-1,delta_t-1))
-        
-        
-    plt.ylabel('Training time')
-    plt.xlabel('Testing time')
-    
-    # plt.title('Test accuracy')
-    plt.tight_layout()
-
-    end_time = time.time()
-    total_time = (end_time - start_time)/60
-    
-    print('Time elapsed: %.2f mins' %total_time)
-    return scores, scores_grand_av
+    print('...Mean decoding accuracy: %.4f' % model_scores.mean())
 
 
-def run_ctg_analysis(constants):
-    '''
-    Runs the full cross-temporal decoding analysis pipeline. Binary LDA 
-    classifiers are trained to discriminate between cued stimulus labels 
-    throughout the entire trial length. Saves the data into fie and plots the 
-    cross-temporal decoding matrix, averaged across all models.
-    
-    Parameters
-    ----------
-    constants : dict
-        Dictionary containing the constants for the experiment.
-        
-    Returns
-    -------
-    None.
-
-    '''
-    tmin=0
-    # if experiment 2, update the length of delay intervals saved in constants 
-    # to 7 cycles (same as for expt1)
-    if constants.PARAMS['experiment_number']==2:
-        dg.update_time_params(constants.PARAMS,7)
-    tmax=constants.PARAMS['trial_timepoints']['delay2_end']
-    fit_and_plot_ctg(constants,tmin,tmax)
-    plt.savefig(constants.PARAMS['FIG_PATH']+'cross_temp_decoding_alltimepoints.png')
-    plt.savefig(constants.PARAMS['FIG_PATH']+'cross_temp_decoding_alltimepoints.svg')
+# %% 2: cross-temporal decoding
 
 
-def run_ctg_analysis_new_delays(constants):
-    
-    '''
-    Runs the full cross-temporal decoding analysis pipeline. Binary LDA 
-    classifiers are trained to discriminate between cued stimulus labels 
-    throughout the entire trial length. Saves the data into fie and plots the 
-    cross-temporal decoding matrix, averaged across all models.
-    
-    Parameters
-    ----------
-    constants : dict
-        Dictionary containing the constants for the experiment.
-        
-    Returns
-    -------
-    None.
+def run_ctg_pipeline_single_model(constants, model_number, time_range, item_status='cued', trial_type='valid'):
+    """
+    Run the cross-temporal generalisation decoding pipeline for a single model. Steps include loading the data,
+    constructing the colour labels, splitting the dataset into location arrays, shuffling trials and fitting and
+    testing the cross-temporal generalising decoders.
 
-    '''
-    
-    tmin=0
-    # if experiment 2, update the length of delay intervals saved in constants 
-    # first to the within-training range delay (4 cycles) , then to the 
-    # out-of-training range delay (10 cycles)
-    for delay_length,custom_path in zip([4,10],['in_range_tempGen','out_range_tempGen']):
-        dg.update_time_params(constants.PARAMS,delay_length)
-        tmax=constants.PARAMS['trial_timepoints']['delay2_end']
-        
-        fit_and_plot_ctg(constants,tmin,tmax,custom_path='/'+custom_path)
-        plt.title(custom_path)
-        plt.savefig(constants.PARAMS['FIG_PATH']+'cross_temp_decoding_alltimepoints_'+custom_path+'.png')
-        plt.savefig(constants.PARAMS['FIG_PATH']+'cross_temp_decoding_alltimepoints_'+custom_path+'.svg')
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param int model_number: Number of the model for which to run the analysis pipeline.
+    :param list time_range: Start and end timepoints defining the temporal range for which to run the analysis, in the
+        form: [t_min, t_max]
+    :param str item_status: Which item to run the decoding analysis for, choose from 'cued', 'uncued', 'probed', and
+        'unprobed'.
+    :param str trial_type: Type of trials for which to run the decoder. Choose from 'valid' and 'invalid'
+    :return: scores: array with decoder test scores, shape: (n_conditions, n_train_timepoints, n_test_timepoints), where
+        conditions correspond to the cued item locations and their grand average, in that order
+    """
+    if item_status is not 'cued':
+        raise NotImplementedError('Analysis not implemented for uncued items.')
+    # run the cross-temporal decoding pipeline for a single model
 
-#%% 3) compare maintenance mechanisms between expts 1 & 2
+    # load data
+    model_data = load_model_data(constants, model_number, trial_type)
+    # get cued labels, binned
+    labels = get_colour_labels(constants, model_data, 'cued')
+
+    # extract delay data
+    delay_ix = np.arange(time_range[0], time_range[1])
+    delay_data = extract_delay_data(delay_ix, model_data)
+
+    # split datasets by the cue location and shuffle trials
+    labels, data = split_into_location_data(constants, labels, delay_data)
+    labels_shuffled, data_shuffled = shuffle_trials(model_number, labels, data)
+
+    # reshape data into (n_trials x n_rec x n_timepoints)
+    data_shuffled = [data_subset.transpose([0, -1, 1]) for data_subset in data_shuffled]
+    print(data_shuffled[0].shape)
+
+    # fit decoder
+    scores = []
+    # loop through the different cue locations
+    for loc_data, loc_labels in zip(data_shuffled, labels_shuffled):
+        scores.append(lda_cg_time(loc_data, loc_labels))
+    scores = np.stack(scores)
+    scores = np.stack((scores, scores.mean(0)[None]))   # add mean across the locations as the last row
+
+    return scores
+
+
+def run_ctg_analysis(constants, trial_type='valid', delay_length=7):
+    """
+    Runs the full cross-temporal decoding analysis pipeline. Binary LDA classifiers are trained to discriminate between
+    the cued stimulus labels throughout the entire trial length. Saves the data into file and plots the cross-temporal
+    decoding matrix, averaged across all models.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param str trial_type: Type of trials for which to run the analysis. Choose from 'valid' and 'invalid'
+    :param int delay_length:
+
+    """
+    t_min = 0
+    # if experiment 3 (variable delays), update the length of delay intervals saved in constants to the required value
+    # For example, to compare findings to those from Experiment 1, pass 7
+    # If we want to test the within-training range delay, set delay_length to 4 cycles; for the out-of-training range
+    # delay, set it 10 cycles
+    if constants.PARAMS['experiment_number'] == 3:
+        dg.update_time_params(constants.PARAMS, delay_length)
+
+    t_max = constants.PARAMS['trial_timepoints']['delay2_end']
+
+    # fit the decoders for all models
+    scores = model_looper(constants, [t_min, t_max], run_ctg_pipeline_single_model, 'cued', trial_type)
+    # shape: (n_models, n_conditions, n_training_timepoints, n_test_timepoints) where n_conditions = 3 and conditions
+    # correspond : (location 1 scores, location 2 scores, scores averaged across the locations)
+
+    # plot
+    # average scores across all models for plotting
+    scores_av = scores[:, -1, :, :].mean(0)  # last column contains the scores averaged across the locations
+    plotter.plot_ctg(constants, scores_av, [t_min, t_max])
+
+    if constants.PLOT_PARAMS['save_plots']:
+        if delay_length == 7:
+            # standard delay length
+            cond_name = ''
+        elif delay_length == 4:
+            cond_name = 'in_range_tempGen'
+            plt.title(f'Cross-temporal generalisation decoding of cued colours: {cond_name}')
+        elif delay_length == 10:
+            cond_name = 'out_range_tempGen'
+            plt.title(f'Cross-temporal generalisation decoding of cued colours: {cond_name}')
+        else:
+            cond_name = f'_delay_length_{delay_length}_cycles'
+            plt.title(f'Cross-temporal generalisation decoding of cued colours: {cond_name}')
+        plt.savefig(f"{constants.PARAMS['FIG_PATH']}cross_temp_decoding_alltimepoints{cond_name}.png")
+        plt.savefig(f"{constants.PARAMS['FIG_PATH']}cross_temp_decoding_alltimepoints{cond_name}.svg")
+
+# %% 3) compare maintenance mechanisms between expts 1 & 3
+
 
 def get_delay_timepoints():
-    d1_start = c.PARAMS['trial_timepoints']['delay1_start']
-    d1_end = c.PARAMS['trial_timepoints']['delay1_end']
-    d2_start = c.PARAMS['trial_timepoints']['delay2_start']
-    d2_end = c.PARAMS['trial_timepoints']['delay2_end']
+    """
+    Get the indices corresponding to the delay 1 and 2 timepoints in the ctg matrix (the diagonal and off-diagonal
+    elements).
+    :return: d_x, d_y, diag_ix: x- and y-indices for the off-diagonal entries, diagonal indices
+    """
+    import constants.constants_expt1 as c1
+    d1_start = c1.PARAMS['trial_timepoints']['delay1_start']
+    d1_end = c1.PARAMS['trial_timepoints']['delay1_end']
+    d2_start = c1.PARAMS['trial_timepoints']['delay2_start']
+    d2_end = c1.PARAMS['trial_timepoints']['delay2_end']
 
-
-    # get the indices corresponding to the delay 1 and 2 timepoints in the ctg 
-    # matrix (only the off-diagonal elements)
+    # get the indices corresponding to the delay 1 and 2 timepoints in the ctg matrix (only the off-diagonal elements)
     # delay1
-    d1_x,d1_y = np.concatenate((np.triu_indices(c.PARAMS['trial_timings']['delay1_dur'],k=1),
-                                np.tril_indices(c.PARAMS['trial_timings']['delay1_dur'],k=-1)),1)
+    d1_x, d1_y = np.concatenate((np.triu_indices(c1.PARAMS['trial_timings']['delay1_dur'], k=1),
+                                 np.tril_indices(c1.PARAMS['trial_timings']['delay1_dur'], k=-1)), 1)
     d1_x += d1_start
     d1_y += d1_start
-    
+
     # delay2
-    d2_x,d2_y = np.concatenate((np.triu_indices(c.PARAMS['trial_timings']['delay2_dur'],k=1),
-                                np.tril_indices(c.PARAMS['trial_timings']['delay2_dur'],k=-1)),1)
+    d2_x, d2_y = np.concatenate((np.triu_indices(c1.PARAMS['trial_timings']['delay2_dur'], k=1),
+                                 np.tril_indices(c1.PARAMS['trial_timings']['delay2_dur'], k=-1)), 1)
     d2_x += d2_start
     d2_y += d2_start
 
     # concatenate
-    d_x = np.concatenate((d1_x,d2_x))
-    d_y = np.concatenate((d1_y,d2_y))
+    d_x = np.concatenate((d1_x, d2_x))
+    d_y = np.concatenate((d1_y, d2_y))
     # get the indices of the diagonal elements
-    diag_ix = np.concatenate((np.arange(d1_start,d1_end),np.arange(d2_start,d2_end)))
-    
-    return d_x,d_y,diag_ix
+    diag_ix = np.concatenate((np.arange(d1_start, d1_end), np.arange(d2_start, d2_end)))
+
+    return d_x, d_y, diag_ix
 
 
 def get_mean_delay_scores():
-    # get the paths to expt 1 (standard model) and 2 (variable delays model) 
+    """
+    Calculate the mean diagonal and off-diagonal decoding scores for all models.
+    return: diag_scores, off_diag_scores
+    """
+    import constants.constants_expt1 as c1
+    import constants.constants_expt3 as c3
+    # get the paths to expt 1 (standard model) and 3 (variable delays model)
     # datafiles
-    standard_model_path = c.PARAMS['BASE_PATH'] +\
-        'data_vonMises/experiment_1/' +\
-            'sigma0.07/kappa5.0/nrec200/lr0.0001/'
-    vardelay_model_path = c.PARAMS['BASE_PATH'] +\
-        'data_vonMises/experiment_2/' +\
-            'sigma0.0/kappa5.0/nrec200/lr0.0001/'
-    
+    standard_model_path = c1.PARAMS['RESULTS_PATH']
+    vardelay_model_path = c3.PARAMS['RESULTS_PATH']
+
     # get the indices corresponding to the delay timepoints in the ctg matrix  
     d_x, d_y, diag_ix = get_delay_timepoints()
-    
+
     # calculate the mean delay scores for diagonal and off-diagonal elements
-    off_diag_scores = np.empty((c.PARAMS['n_models'],2)) # model, condition
-    diag_scores = np.empty((c.PARAMS['n_models'],2)) # model, condition
-    for i,condition in enumerate([vardelay_model_path,standard_model_path]):
-        scores_struct = pickle.load(open(condition+'pca_data/valid_trials/ctg_scores.pckl','rb'))   
-        
+    off_diag_scores = np.empty((c1.PARAMS['n_models'], 2))  # model, condition
+    diag_scores = np.empty((c1.PARAMS['n_models'], 2))  # model, condition
+
+    for i, condition in enumerate([vardelay_model_path, standard_model_path]):
+        with open(f"{condition}valid_trials/ctg_scores.pckl", 'rb') as f:
+            scores_struct = pickle.load(f)
+
         # get the mean off- and diagonal scores, averaged across both delays
-        diag_scores[:,i] = np.diagonal(scores_struct['scores'][:,:,-1,:])[:,diag_ix].mean(-1)
-        off_diag_scores[:,i] = scores_struct['scores'][d_x,d_y,-1,:].mean(0)
-        
+        diag_scores[:, i] = np.diagonal(scores_struct['scores'][:, :, -1, :])[:, diag_ix].mean(-1)
+        off_diag_scores[:, i] = scores_struct['scores'][d_x, d_y, -1, :].mean(0)
 
-    return diag_scores,off_diag_scores
+    return diag_scores, off_diag_scores
 
 
-def run_all_contrasts(off_diag_scores,diag_scores):
-    '''
-    Run all 3 contrasts for the analysis. Contrasts 1 and 2 test if the mean 
-    off-diagonal decoding scores are significantly higher than the chance 
-    decoding level (50%). Contrast 3 tests whether the mean ratio between the 
-    off- and diagonal elements is significantly higher in the variable than 
-    fixed delay condition. The ratio is used as an index of the temporal 
-    stabilility of the code - for a perfectly temporally stable code, it 
-    should be ~1.
+def run_all_contrasts(off_diag_scores, diag_scores):
+    """
+    Run all 3 contrasts for the maintenance mechanism analysis. Contrasts 1 and 2 test if the mean off-diagonal decoding
+    scores are significantly higher than the chance decoding level (50%). Contrast 3 tests whether the mean ratio
+    between the off- and diagonal elements is significantly higher in the variable than fixed delay condition. The ratio
+    is used as an index of the temporal stability of the code - for a perfectly temporally stable code, it should be ~1.
 
-    Parameters
-    ----------
-    off_diag_scores : array (n_models,n_conditions)
-        Mean off-diagonal (cross-temporal) decoding scores for individual models.
-        Values from the variable delay condition in the first, fixed - in the 
-        second column.
-    diag_scores : array (n_models,n_conditions)
-        Mean diagonal decoding scores for individual models, in the same format
-        as the off-diag_scores.
-
-    Returns
-    -------
-    None.
-
-    '''
-    # contrast 1: test variabe delays off-diagonal mean against chance (0.5)
+    :param numpy.ndarray off_diag_scores: Mean off-diagonal (cross-temporal) decoding scores for individual models.
+        Values from the variable delay condition in the first, fixed - in the second column.
+        Shape: (n_models, n_conditions)
+    :param numpy.ndarray diag_scores: Mean diagonal decoding scores for individual models, in the same format as the
+        off-diag_scores. Shape: (n_models, n_conditions)
+    """
+    # contrast 1: test variable delays off-diagonal mean against chance (0.5)
     print('...Contrast 1: Variable delays mean ctg decoding > chance')
-    run_contrast_single_sample(off_diag_scores[:,0],h_mean=[.5],alt='greater')
-    print('... mean = %.2f' % off_diag_scores[:,0].mean())
+    run_contrast_single_sample(off_diag_scores[:, 0], h_mean=[.5], alt='greater')
+    print('... mean = %.2f' % off_diag_scores[:, 0].mean())
     # contrast 2: test fixed delays off-diagonal mean against chance (0.5)
     print('...Contrast 2: Fixed delays mean ctg decoding > chance')
-    run_contrast_single_sample(off_diag_scores[:,1],h_mean=[.5],alt='greater')
-    print('... mean = %.2f' % off_diag_scores[:,1].mean())
+    run_contrast_single_sample(off_diag_scores[:, 1], h_mean=[.5], alt='greater')
+    print('... mean = %.2f' % off_diag_scores[:, 1].mean())
     # contrast 3: test if mean off-/diagonal ratio for variable delays > fixed delays
     print('...Contrast 3: Variable delays mean ratio off-/diagonal decoding > fixed delays')
-    run_contrast_unpaired_samples(off_diag_scores[:,0]/diag_scores[:,0],
-                                off_diag_scores[:,1]/diag_scores[:,1],
-                                alt='greater')
+    run_contrast_unpaired_samples(off_diag_scores[:, 0] / diag_scores[:, 0],
+                                  off_diag_scores[:, 1] / diag_scores[:, 1],
+                                  alt='greater')
     return
 
 
-def plot_off_diagonal(off_diag_scores):
-    '''
-    Creates a boxplot of the mean off-diagonal decoding scores for the variable
-    (expt 2) and fixed delay (expt 1) conditions. Chance level plotted as 
-    dashed line.
-
-    Parameters
-    ----------
-    off_diag_scores : array (n_models,n_conditions)
-        Mean off-diagonal (cross-temporal) decoding scores for individual models.
-        Values from the variable delay condition in the first, fixed - in the 
-        second column.
-
-    Returns
-    -------
-    None.
-
-    '''
-    # reformat data into a pandas dataframe for seaborn
-    labels = np.array([['variable']*c.PARAMS['n_models'],['fixed']*c.PARAMS['n_models']]).reshape(-1)
-    tbl = pd.DataFrame(np.stack((off_diag_scores.reshape(-1,order='F'),
-                                 labels),1),
-                       columns=['mean delay score','condition'])
-    tbl['mean delay score'] = tbl['mean delay score'].astype(float)
-    
-    plt.figure(figsize=(5.5,5))
-    sns.boxplot(data=tbl, x='condition',y='mean delay score',
-                palette=[sns.color_palette("Set2")[i] for i in [0,-2]])
-                # palette="Set2")
-    plt.plot(plt.xlim(),[.5,.5],'k--')
-    plt.ylim([.4,.85])
-    plt.tight_layout()
-    
-    
 def run_maintenance_mechanism_analysis():
-    '''
-    Runs the entire maintenance mechanism analysis. Calculates the mean delay 
-    cross-temporal generalisation scores and compares those between expts 1 & 2
-    to assess whether the networks trained with variable delay lengths (expt 2)
-    form a more temporally stable working memory code than those trained with 
-    fixed delays (expt 1).
+    """
+    Runs the entire maintenance mechanism analysis. Calculates the mean delay cross-temporal generalisation scores and
+    compares those between Experiments 1 & 3 to assess whether the networks trained with variable delay lengths (Expt 3)
+    form a more temporally stable working memory code than those trained with fixed delays (Expt 1).
+    """
 
-    Returns
-    -------
-    None.
-
-    '''
-    print('Comparing the memory maintenance mechanisms between expts 1 & 2')
+    print('Comparing the memory maintenance mechanisms between expts 1 & 3')
     # calculate the off- and on-diagonal decoding scores
-    diag_scores,off_diag_scores = get_mean_delay_scores()
+    diag_scores, off_diag_scores = get_mean_delay_scores()
 
     # run the statistical tests
-    run_all_contrasts(off_diag_scores,diag_scores)
-    
+    run_all_contrasts(off_diag_scores, diag_scores)
+
     # boxplot of the off-diagonal decoding accuracy
-    plot_off_diagonal(off_diag_scores)
+    plotter.plot_off_diagonal(off_diag_scores)
     return
+# %% 4) single-readout hypothesis
 
 
-#%% 4) single-readout hypothesis 
+def run_cg_decoding_cued_analysis(constants, trial_type='valid'):
+    """
+    Runs the entire cued colour cross-generalisation decoding analysis. LDA classifiers trained and tested in the
+    post-cue delay.
 
-def get_cg_decoding_cued(constants,which_delay='postcue',trial_type='valid'):
-    '''
-    
-
-    Parameters
-    ----------
-    constants : TYPE
-        DESCRIPTION.
-    which_delay : str, optional
-        Name of the memory delay to extract the data from. Pass 'precue', 
-        'postcue' or 'postprobe'. Default is 'postcue'.
-    trial_type : TYPE, optional
-        DESCRIPTION. The default is 'valid'.
-
-    Returns
-    -------
-    model_scores_test : TYPE
-        DESCRIPTION.
-    model_scores_cg : TYPE
-        DESCRIPTION.
-
-    '''
-    '''
-    Train  LDA binary classifiers to discriminate between pairs of 
-    cued colour labels on cue-1 trials and test their x-generalisation 
-    performance on cue-2 trials, and vice-versa. Data taken from the last 
-    time-point of the post-cue delay.
-
-    Parameters
-    ----------
-    constants : dict
-        Dictionary containing the constants for the experiment.
-
-    Returns
-    -------
-    model_scores : array
-        Average test decoding acuracy scores for all models.
-
-    '''
-    load_path = constants.PARAMS['FULL_PATH']+'pca_data/'+trial_type+'_trials/'
-    model_scores_test = np.empty((constants.PARAMS['n_models'],))
-    model_scores_cg = np.empty((constants.PARAMS['n_models'],))
-    
-    if which_delay == 'precue':
-        delay_ix = constants.PARAMS['trial_timepoints']['delay1_end']-1
-        # fname_str = 'precue'
-    elif which_delay == 'postcue':
-        # post-cue delay (uncued colours)
-        delay_ix = constants.PARAMS['trial_timepoints']['delay2_end']-1
-        # fname_str = 'uncued_postcue'
-    elif which_delay == 'postprobe':
-        delay_ix = constants.PARAMS['trial_timepoints']['delay3_end']-1
-        # fname_str = 'unprobed_postprobe'
-    
-    for model in range(constants.PARAMS['n_models']):
-        # load data
-        model_number = str(model)
-        print('Model '+ model_number +'/' + str(constants.PARAMS['n_models']))
-        f = open(load_path+'/eval_data_model' + model_number + '.pckl', 'rb')
-        eval_data = pickle.load(f)    
-        f.close()
-        
-        n_trials = eval_data['data'].shape[0]
-        
-        # get the cued colour labels
-        labels_cued = np.concatenate((eval_data["labels"]["c1"][:n_trials//2],
-                                  eval_data["labels"]["c2"][n_trials//2:]))
-        # bin the labels into B colour bins
-        labels_cued_binned = helpers.bin_labels(labels_cued,constants.PARAMS['B'])
-        
-        # separate the labels into two arrays, one for each cued location
-        loc1_labels = labels_cued_binned[:n_trials//2]
-        loc2_labels = labels_cued_binned[n_trials//2:]
-        
-        # split the hidden activity data into two arrays, each one only 
-        # containing trials where one of the location was cued
-        delayloc1 = eval_data['data'][:n_trials//2,delay_ix,:]
-        delayloc2 = eval_data['data'][n_trials//2:,delay_ix,:]
-        
-        # shuffle trials
-        rng = np.random.default_rng(seed=model)
-        
-        trial_order1 = rng.permutation(n_trials//2)
-        trial_order2 = rng.permutation(n_trials//2)
-        
-        delayloc1 = delayloc1[trial_order1,:]
-        delayloc2 = delayloc2[trial_order2,:]
-        loc1_labels = loc1_labels[trial_order1]
-        loc2_labels = loc2_labels[trial_order2]
-        
-        
-        # do LDA to get the classification test (same location cue, withheld 
-        # trials) and cross-generalisation (other cue trials) scores
-        scores_test, scores_cg = lda_cg(delayloc1,loc1_labels,
-                                        delayloc2,loc2_labels,
-                                        cv=2)
-        # average scores across the different binary classifiers and save
-        model_scores_test[model] = scores_test.mean()
-        model_scores_cg[model] = scores_cg.mean()
-    return model_scores_test, model_scores_cg
-
-
-def run_cg_decoding_cued_analysis(constants):
-    '''
-    Runs the entire cued colour cross-generalisation decoding analysis. 
-    LDA classifiers trained and tested in the post-cue delay.
-
-    Parameters
-    ----------
-    constants : dict
-        Dictionary containing the constants for the experiment.
-
-    Returns
-    -------
-    None.
-
-    '''
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param str trial_type: Optional. Relevant for the probabilistic paradigm (experiment 4). Pass 'valid' or 'invalid'.
+        The default is 'valid'.
+    """
     print('Run the cued colour decoding and cross-generalisation analysis')
-    # get decoding test and cg scores
-    model_scores_test, model_scores_cg = get_cg_decoding_cued(constants)
-    
+    # get decoding cg scores
+    model_scores = model_looper(constants, 'postcue', run_decoding_pipeline_single_model, 'cued', trial_type, cg=True)
+
     # save into file
-    cg_decoding_cued_postcue_delay = {}
-    cg_decoding_cued_postcue_delay['test_accuracy']=model_scores_test
-    cg_decoding_cued_postcue_delay['cross_gen_accuracy']=model_scores_cg
-    load_path = constants.PARAMS['FULL_PATH']+'pca_data/valid_trials/'
-    pickle.dump(cg_decoding_cued_postcue_delay,open(load_path+'cg_decoding_cued_postcue_delay.pckl','wb'))
-    # run constrast - test against chance
+    cg_decoding_cued_postcue_delay = {'test_accuracy': model_scores[:, 0], 'cross_gen_accuracy': model_scores[:, 1]}
+    # save_path = f"{constants.PARAMS['FULL_PATH']}pca_data/{trial_type}_trials/"
+    # with open(f"{save_path}cg_decoding_cued_postcue_delay.pckl", 'wb') as f:
+    #     pickle.dump(cg_decoding_cued_postcue_delay, f)
+
+    # Run contrasts
     print('...Run contrast: mean test decoding significantly greater than chance (0.5) ')
-    run_contrast_single_sample(model_scores_test, 0.5)
-    
-    print('...Mean decoding accuracy: %.4f' %model_scores_test.mean())
-    
+    run_contrast_single_sample(cg_decoding_cued_postcue_delay['test_accuracy'], 0.5)
+    print('...Mean decoding accuracy: %.4f' % cg_decoding_cued_postcue_delay['test_accuracy'].mean())
+
     print('...Run contrast: mean cross_generalisation significantly greater than chance (0.5) ')
-    run_contrast_single_sample(model_scores_cg, 0.5)
-    
-    print('...Mean cross-generalisation accuracy: %.4f' %model_scores_cg.mean())
+    run_contrast_single_sample(cg_decoding_cued_postcue_delay['cross_gen_accuracy'], 0.5)
+    print('...Mean cross-generalisation accuracy: %.4f' % cg_decoding_cued_postcue_delay['cross_gen_accuracy'].mean())
 
 
-#%% 5) analogue to the CDI analysis: compare the discriminability of colour 
-#    representations pre-cue, after they are cued and uncued
+# %% 5) analogue to the CDI analysis: compare the discriminability of colour representations pre-cue, after they are
+# cued and uncued
 
-def run_colour_discrim_analysis(constants,trial_type='valid'):
-    '''
-    Runs a decoding analysis complementary to the CDI analysis reported in 
-    Fig. 3H. Train LDA decoders in cross-validation to discriminate between 
-    colours in the pre-cue delay, as well as after they are cued or uncued, and
-    the compare test scores between the 3 conditions to asses how the amount of
-    information about cued and uncued items changes across delays.
 
-    Parameters
-    ----------
-    constants : dict
-        Dictionary containing the constants for the experiment.
-    trial_type : str, optional
-        Optional. Relevant for the probabilistic paradigm (experiment 3). Pass 
-        'valid' or 'invalid'. The default is 'valid'.
+def run_colour_discrim_analysis(constants, trial_type='valid'):
+    """
+    Runs a decoding analysis complementary to the CDI analysis reported in Fig. 3H (for Expt 1). Train LDA decoders in
+    cross-validation to discriminate between colours in the pre-cue delay, as well as after they are cued or uncued, and
+    the compare test scores between the 3 conditions to assess how the amount of information about cued and uncued items
+    changes across delays. Results from this analysis for Experiment 1 are reported in Supplementary Fig. S1 C.
 
-    Returns
-    -------
-    None.
-
-    '''
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param str trial_type: Optional. Relevant for the probabilistic paradigm (experiment 4). Pass 'valid' or 'invalid'.
+        The default is 'valid'.
+    """
+    assert trial_type == 'valid', "Analysis not implemented for invalid trials. Add this functionality by altering " \
+                                  "the 'get_colour_labels' function."
+    print('Running the colour discriminability analysis (using decoding scores).')
     # get the pre-cue decoding test accuracy
-    model_scores_precue = get_decoding_within_plane(constants,'precue',trial_type)
-    
-    model_scores_uncued = get_decoding_within_plane(constants,'postcue',trial_type)
-    model_scores_cued, cg = get_cg_decoding_cued(constants,'postcue',trial_type)
-    
-    
-    if constants.PARAMS['experiment_number']==3:
-        model_scores_unprobed = get_decoding_within_plane(constants,'postprobe',trial_type)
-        model_scores_probed, _ = get_cg_decoding_cued(constants,'postprobe',trial_type)
-    
-    # load the post-cue (uncued and cued) test accuracies from file
-    data_path = constants.PARAMS['FULL_PATH']+'pca_data/'+trial_type+'_trials/'
-    # model_scores_uncued = pickle.load(open(load_path+'decoding_acc_uncued_postcue_delay.pckl','rb'))
-    # cued_scores_dict = pickle.load(open(load_path+'cg_decoding_cued_postcue_delay.pckl','rb'))
-    # model_scores_cued = cued_scores_dict['test_accuracy']
-    
-    
-    if constants.PARAMS['experiment_number']==3:
-        all_scores = np.stack((model_scores_precue,model_scores_cued,
-                               model_scores_uncued,model_scores_probed,
-                               model_scores_unprobed),axis=1)
-        labels = ['pre_cue','cued','uncued','probed','unprobed']
-       
-                           
-    else:
-        all_scores = np.stack((model_scores_precue,model_scores_cued,model_scores_uncued),axis=1)
-        labels = ['pre_cue','cued','uncued']
-    
-    # all_labels =  np.stack(([[label]*constants.PARAMS['n_models'] for label in labels]),axis=1)
-    pickle.dump(all_scores,open(data_path+'cdi_analogous_decoding_scores.pckl','wb'))
-    # export to csv for jasp
-    
-    # scores_tbl = pd.DataFrame(np.stack((all_scores.flatten(),
-    #                              all_labels.flatten()),1),
-    #                    columns=['mean delay score','condition'])
-    scores_tbl = pd.DataFrame(all_scores,columns=labels)
-    scores_tbl.to_csv(data_path+'cdi_analogous_decoding_scores.csv')
-    # do pairwise contrasts
-    rg.test_CDI_contrasts(all_scores)
-    
-    # plot
-    # standardise results before plotting
-    # z_all_scores = (all_scores - all_scores.mean())/np.std(all_scores)
-    
-    # plot as units of standard normal distr
-    all_scores_transf = norm.ppf(all_scores)
-    
-    ax = rg.plot_CDI(constants,all_scores_transf,logTransform=False,save_fig=False)
-    plt.ylabel('Test decoding accuracy [snd units]')
-    
-    plt.savefig(constants.PARAMS['FIG_PATH']+' cdi_analogue_with_decoding.png')
-    plt.savefig(constants.PARAMS['FIG_PATH']+' cdi_analogue_with_decoding.svg')
-   
-    return all_scores
-    
+    # this could be rewritten as a
+    model_scores_precue = model_looper(constants, 'precue', run_decoding_pipeline_single_model, 'cued',
+                                       trial_type)
+    model_scores_uncued = model_looper(constants, 'postcue', run_decoding_pipeline_single_model, 'uncued',
+                                       trial_type)
+    model_scores_cued = model_looper(constants, 'postcue', run_decoding_pipeline_single_model, 'cued',
+                                     trial_type)
 
-def export_colour_discrim_results(constants):
-    if constants.PARAMS['experiment_number']==1:
-        all_scores = run_colour_discrim_analysis(constants,trial_type='valid')
-    elif constants.PARAMS['experiment_number']==3:
-        validity_levels = ['val1','val0_75','val0_5']
-        all_scores = [[] for i in range(len(validity_levels))]
-        # for v in validity_levels:
-             
-            
+    if constants.PARAMS['experiment_number'] == 4:
+        model_scores_unprobed = model_looper(constants, 'postprobe', run_decoding_pipeline_single_model,
+                                             'unprobed', trial_type)
+        model_scores_probed = model_looper(constants, 'postprobe', run_decoding_pipeline_single_model,
+                                           'probed', trial_type)
+        all_scores = np.stack((model_scores_precue, model_scores_cued,
+                               model_scores_uncued, model_scores_probed,
+                               model_scores_unprobed), axis=1)
+        labels = ['pre-cue', 'cued', 'uncued', 'probed', 'unprobed']
+        if constants.PARAMS['cue_validity'] < 1:
+            raise Warning("Analysis only implemented for valid trials. To recreate the full CDI comparison (including "
+                          "invalid trials), extend the functionality in the 'get_colour_labels' function.")
+    else:
+        all_scores = np.stack((model_scores_precue, model_scores_cued, model_scores_uncued), axis=1)
+        labels = ['pre-cue', 'cued', 'uncued']
+
+    # load the post-cue (uncued and cued) test accuracies from file
+    data_path = f"{constants.PARAMS['FULL_PATH']}pca_data/{trial_type}_trials/"
+    pickle.dump(all_scores, open(data_path + 'cdi_analogous_decoding_scores.pckl', 'wb'))
+    # export to csv for jasp
+    scores_tbl = pd.DataFrame(all_scores, columns=labels)
+    scores_tbl.to_csv(data_path + 'cdi_analogous_decoding_scores.csv')
+
+    # do pairwise contrasts and plot - for Experiment 1
+    if constants.PARAMS['experiment_number'] == 1:
+        # contrasts - ran in JASP
+        # rg.test_CDI_contrasts(constants, scores_tbl)
+
+        # plot (as units of standard normal distr)
+        all_scores_transf = norm.ppf(all_scores)
+        all_scores_transf_df = pd.DataFrame(all_scores_transf, columns=labels)
+
+        _ = plotter.plot_CDI(constants, all_scores_transf_df, log_transform=False)
+        plt.ylabel('Test decoding accuracy [snd units]')
+
+        if constants.PLOT_PARAMS['save_plots']:
+            plt.savefig(constants.PARAMS['FIG_PATH'] + ' cdi_analogue_with_decoding.png')
+            plt.savefig(constants.PARAMS['FIG_PATH'] + ' cdi_analogue_with_decoding.svg')
+
     return
-    
-#%% 6) analogue to the rotated/unrotated plane AI analysis: compare the 
+
+
+# %% 6) analogue to the rotated/unrotated plane AI analysis: compare the
 # cross-temporal generalisation scores (between the precue and postcue 
 # delays) between the two cued planes
 
-def get_decoding_unrotrot(constants,cv=2):
-    '''
+# this function could be broken up into components in the future
+def get_decoding_unrotrot(constants, cv=2):
+    """
     For each location, using half the data, get the cross-temporal generalisation
-    score across the two delays. Relabel the location with a higher score as 
+    score across the two delays. Relabel the location with a higher score as
     'unrotated' and repeat the analysis using the other half of data, this time
     saving the ctg scores for the 'rotated' and 'unrotated' planes. If models
-    keep one pre-cue subspace unchanged, the unrotated scores should be 
+    keep one pre-cue subspace unchanged, the unrotated scores should be
     significantly higher than 1) chance and 2) the rotated scores.
-    
-
-    Parameters
-    ----------
-    params : dict
-        Experiment parameters.
-    cv : int, optional
-        Number of cross-validation folds. The default is 2.
-
-    Returns
-    -------
-    ctg_decoding_test : array
-        AI values for the 'unrotated' and 'rotated' planes, averaged across cv 
-        folds. Format: (n_dims,(unrotated,rotated),model)
-   
-    same_ixs : array (n_cv_folds,n_models)
-        Indexes of the unrotated plane for each model.
-
-    '''
-    load_path = constants.PARAMS['FULL_PATH'] + 'pca_data/valid_trials'
 
 
-    d1_ix = constants.PARAMS['trial_timepoints']['delay1_end']-1
-    d2_ix = constants.PARAMS['trial_timepoints']['delay2_end']-1
-    
-    trial_ixs = pickle.load(open(load_path+'/trial_ixs_for_unrotrot_analysis.pckl','rb'))
-    
-    
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param int cv: Number of cross-validation folds. The default is 2.
+    :return :
+        ctg_decoding_test - array AI values for the 'unrotated' and 'rotated' planes, averaged across cv folds.
+            Format: (n_dims,(unrotated,rotated),model)
+        same_ixs : array (n_cv_folds,n_models) Indexes of the unrotated plane for each model.
+
+    """
+    # load the train and test indices
+    load_path = f"{constants.PARAMS['FULL_PATH']}pca_data/valid_trials"
+    trial_ixs = pickle.load(open(load_path + '/trial_ixs_for_unrotrot_analysis.pckl', 'rb'))
+
+    # get the indices of the endpoints of the two delays
+    d1_ix = constants.PARAMS['trial_timepoints']['delay1_end'] - 1
+    d2_ix = constants.PARAMS['trial_timepoints']['delay2_end'] - 1
+
     # cross-validated test decoding score of the same location during the same delay
     # i.e., how decodable is the colour information for this condition
-    test_decoding_train = np.zeros((2,2,constants.PARAMS['n_models'])) 
-    test_decoding_test = np.zeros((2,2,constants.PARAMS['n_models'])) 
+    test_decoding_train = np.zeros((2, 2, constants.PARAMS['n_models']))
+    test_decoding_test = np.zeros((2, 2, constants.PARAMS['n_models']))
     # cross-temporal-generalisation decoding score. Decoder trained on a given 
     # location with data from one delay and tested on the other delay
     # i.e., if the plane is unrotated and phase-aligned, then the score should be
     # very high
-    ctg_decoding_train = np.zeros((2,2,constants.PARAMS['n_models'])) 
-    ctg_decoding_test = np.zeros((2,2,constants.PARAMS['n_models'])) 
+    ctg_decoding_train = np.zeros((2, 2, constants.PARAMS['n_models']))
+    ctg_decoding_test = np.zeros((2, 2, constants.PARAMS['n_models']))
     # cv folds, unrotated/rotated, model
-    
-    same_ixs = np.zeros((cv,constants.PARAMS['n_models'])) #ixs of the unrotated plane
-    
-    
+
+    same_ixs = np.zeros((cv, constants.PARAMS['n_models']))  # ixs of the unrotated plane
+
     for model in range(constants.PARAMS['n_models']):
-        # load data
-        model_number = str(model)
-        f = open(load_path+'/eval_data_model' + model_number + '.pckl', 'rb')
-        eval_data = pickle.load(f)    
-        f.close()
-                
-        train, test = trial_ixs['train'][model_number],trial_ixs['test'][model_number]
-        
-        loc_split = constants.PARAMS['B']
-        for i in range(2):
-            # bin the train and test datasets intro colour bins
-            # data_train = helpers.bin_data(eval_data['data'][train[i],:,:],params)
-            # data_test = helpers.bin_data(eval_data['data'][test[i],:,:],params)
-            
-            # delay1_train = data_train[:,d1_ix,:]
-            # delay1_test = data_test[:,d1_ix,:]
-            
-            # delay2_train = data_train[:,d2_ix,:]
-            # delay2_test = data_test[:,d2_ix,:]
-            
-            data_train = eval_data['data'][train[i],:,:]
-            data_test = eval_data['data'][test[i],:,:]
-            
-            # run decoding to find the unrotated and rotated subspace
-        
-            
+        # load model data
+        eval_data = load_model_data(constants, model)
+        # extract the train and test indices
+        train, test = trial_ixs['train'][str(model)], trial_ixs['test'][str(model)]
+
+        for i in range(cv):
+            # get the train and test subsets
+            data_train = eval_data['data'][train[i], :, :]
+            data_test = eval_data['data'][test[i], :, :]
+
             labels_loc1_train = eval_data["labels"]["c1"][train[i]]
             labels_loc2_train = eval_data["labels"]["c2"][train[i]]
-            
             labels_loc1_test = eval_data["labels"]["c1"][test[i]]
             labels_loc2_test = eval_data["labels"]["c2"][test[i]]
-            
+
             # sort labels
             loc1_train_sorting_ix, labels_loc1_train = helpers.sort_labels(labels_loc1_train)
             loc2_train_sorting_ix, labels_loc2_train = helpers.sort_labels(labels_loc2_train)
-            
             loc1_test_sorting_ix, labels_loc1_test = helpers.sort_labels(labels_loc1_test)
             loc2_test_sorting_ix, labels_loc2_test = helpers.sort_labels(labels_loc2_test)
-        
-            
+
             # bin the labels into B colour bins
-            labels_loc1_train_binned = helpers.bin_labels(labels_loc1_train,constants.PARAMS['B'])
-            labels_loc2_train_binned = helpers.bin_labels(labels_loc2_train,constants.PARAMS['B'])
-            labels_loc1_test_binned = helpers.bin_labels(labels_loc1_test,constants.PARAMS['B'])
-            labels_loc2_test_binned = helpers.bin_labels(labels_loc2_test,constants.PARAMS['B'])
-            
+            labels_loc1_train_binned = helpers.bin_labels(labels_loc1_train, constants.PARAMS['B'])
+            labels_loc2_train_binned = helpers.bin_labels(labels_loc2_train, constants.PARAMS['B'])
+            labels_loc1_test_binned = helpers.bin_labels(labels_loc1_test, constants.PARAMS['B'])
+            labels_loc2_test_binned = helpers.bin_labels(labels_loc2_test, constants.PARAMS['B'])
+
             # sort the arrays
-            data_train_loc1 = data_train[loc1_train_sorting_ix,:,:]
-            data_train_loc2 = data_train[loc2_train_sorting_ix,:,:]
-            data_test_loc1 = data_test[loc1_test_sorting_ix,:,:]
-            data_test_loc2 = data_test[loc2_test_sorting_ix,:,:]
-            
+            data_train_loc1 = data_train[loc1_train_sorting_ix, :, :]
+            data_train_loc2 = data_train[loc2_train_sorting_ix, :, :]
+            data_test_loc1 = data_test[loc1_test_sorting_ix, :, :]
+            data_test_loc2 = data_test[loc2_test_sorting_ix, :, :]
 
             # shuffle trials
             rng = np.random.default_rng(seed=model)
@@ -1100,119 +895,127 @@ def get_decoding_unrotrot(constants,cv=2):
             trial_order_loc2_train = rng.permutation(len(loc2_train_sorting_ix))
             trial_order_loc1_test = rng.permutation(len(loc1_test_sorting_ix))
             trial_order_loc2_test = rng.permutation(len(loc2_test_sorting_ix))
-            
+
             labels_loc1_train_binned = labels_loc1_train_binned[trial_order_loc1_train]
             labels_loc2_train_binned = labels_loc2_train_binned[trial_order_loc2_train]
             labels_loc1_test_binned = labels_loc1_test_binned[trial_order_loc1_test]
             labels_loc2_test_binned = labels_loc2_test_binned[trial_order_loc2_test]
-            
-            
-            data_train_loc1 = data_train_loc1[trial_order_loc1_train,:,:]
-            data_train_loc2 = data_train_loc2[trial_order_loc2_train,:,:]
-            data_test_loc1 = data_test_loc1[trial_order_loc1_test,:,:]
+
+            data_train_loc1 = data_train_loc1[trial_order_loc1_train, :, :]
+            data_train_loc2 = data_train_loc2[trial_order_loc2_train, :, :]
+            data_test_loc1 = data_test_loc1[trial_order_loc1_test, :, :]
             data_test_loc2 = data_test_loc2[trial_order_loc2_test]
-            
+
+            # run decoding to find the unrotated and rotated subspace
 
             # do LDA to get the classification at test (same location cue and 
             # delay, withheld trials) and cross-temporal-generalisation (same
             # location cue, other delay) scores
-            
+
             # use the train data to find the location for which cross-temporal 
             # decoding across the two delays has higher accuracy - this is the 
-            #'unrotated' location
+            # 'unrotated' location
             # scores format: [train_timepoint, test_timepoint]
-            scores_cg_train_loc1, _ = lda_cg_time(np.swapaxes(data_train_loc1[:,[d1_ix,d2_ix],:],-1,1),labels_loc1_train_binned)
-            scores_cg_train_loc2, _ = lda_cg_time(np.swapaxes(data_train_loc2[:,[d1_ix,d2_ix],:],-1,1),labels_loc2_train_binned)
-            
+            scores_cg_train_loc1 = lda_cg_time(np.swapaxes(data_train_loc1[:, [d1_ix, d2_ix], :], -1, 1),
+                                               labels_loc1_train_binned)
+            scores_cg_train_loc2 = lda_cg_time(np.swapaxes(data_train_loc2[:, [d1_ix, d2_ix], :], -1, 1),
+                                               labels_loc2_train_binned)
+
             # rotated location
-            switch_ix = np.argmin((np.array([scores_cg_train_loc1[0,1],scores_cg_train_loc1[1,0]]).mean(),
-                                   np.array([scores_cg_train_loc2[0,1],scores_cg_train_loc2[1,0]]).mean()))
+            switch_ix = np.argmin((np.array([scores_cg_train_loc1[0, 1], scores_cg_train_loc1[1, 0]]).mean(),
+                                   np.array([scores_cg_train_loc2[0, 1], scores_cg_train_loc2[1, 0]]).mean()))
             # unrotated location
-            stay_ix = np.setdiff1d([0,1],switch_ix)[0]
-            
-            same_ixs[i,model] = stay_ix
+            stay_ix = np.setdiff1d([0, 1], switch_ix)[0]
+
+            same_ixs[i, model] = stay_ix
             # repeat the analysis using the test data
-            scores_cg_test_loc1, _ = lda_cg_time(np.swapaxes(data_test_loc1[:,[d1_ix,d2_ix],:],-1,1),labels_loc1_test_binned)
-            scores_cg_test_loc2, _ = lda_cg_time(np.swapaxes(data_test_loc2[:,[d1_ix,d2_ix],:],-1,1),labels_loc2_test_binned)
-            
-            
-            # save the data in the frame of
-            # reference of the 'rotated' and 'unrotated' plane
+            scores_cg_test_loc1 = lda_cg_time(np.swapaxes(data_test_loc1[:, [d1_ix, d2_ix], :], -1, 1),
+                                              labels_loc1_test_binned)
+            scores_cg_test_loc2 = lda_cg_time(np.swapaxes(data_test_loc2[:, [d1_ix, d2_ix], :], -1, 1),
+                                              labels_loc2_test_binned)
+
+            # save the data in the frame of reference of the 'rotated' and 'unrotated' plane
             if stay_ix == 0:
                 # unrotated decoding (loc1)
-                ctg_decoding_train[i,0,model]  = np.array([scores_cg_train_loc1[0,1],scores_cg_train_loc1[1,0]]).mean()
-                ctg_decoding_test[i,0,model]  = np.array([scores_cg_test_loc1[0,1],scores_cg_test_loc1[1,0]]).mean()
+                ctg_decoding_train[i, 0, model] = np.array(
+                    [scores_cg_train_loc1[0, 1], scores_cg_train_loc1[1, 0]]).mean()
+                ctg_decoding_test[i, 0, model] = np.array([scores_cg_test_loc1[0, 1], scores_cg_test_loc1[1, 0]]).mean()
                 # rotated decoding
-                ctg_decoding_train[i,1,model]  = np.array([scores_cg_train_loc2[0,1],scores_cg_train_loc2[1,0]]).mean()
-                ctg_decoding_test[i,1,model]  = np.array([scores_cg_test_loc2[0,1],scores_cg_test_loc2[1,0]]).mean()
-                
+                ctg_decoding_train[i, 1, model] = np.array(
+                    [scores_cg_train_loc2[0, 1], scores_cg_train_loc2[1, 0]]).mean()
+                ctg_decoding_test[i, 1, model] = np.array([scores_cg_test_loc2[0, 1], scores_cg_test_loc2[1, 0]]).mean()
+
                 # decoder accuracy on withheld data from the same delay 
-                test_decoding_train[i,0,model] = np.array([scores_cg_train_loc1[0,0],scores_cg_train_loc1[1,1]]).mean()
-                test_decoding_test[i,0,model] = np.array([scores_cg_test_loc1[0,0],scores_cg_test_loc1[1,1]]).mean()
-                test_decoding_train[i,1,model] = np.array([scores_cg_train_loc2[0,0],scores_cg_train_loc2[1,1]]).mean()
-                test_decoding_test[i,1,model] = np.array([scores_cg_test_loc2[0,0],scores_cg_test_loc2[1,1]]).mean()
+                test_decoding_train[i, 0, model] = np.array(
+                    [scores_cg_train_loc1[0, 0], scores_cg_train_loc1[1, 1]]).mean()
+                test_decoding_test[i, 0, model] = np.array(
+                    [scores_cg_test_loc1[0, 0], scores_cg_test_loc1[1, 1]]).mean()
+                test_decoding_train[i, 1, model] = np.array(
+                    [scores_cg_train_loc2[0, 0], scores_cg_train_loc2[1, 1]]).mean()
+                test_decoding_test[i, 1, model] = np.array(
+                    [scores_cg_test_loc2[0, 0], scores_cg_test_loc2[1, 1]]).mean()
             else:
                 # unrotated decoding (loc2)
-                ctg_decoding_train[i,0,model]  = np.array([scores_cg_train_loc2[0,1],scores_cg_train_loc2[1,0]]).mean()
-                ctg_decoding_test[i,0,model]  = np.array([scores_cg_test_loc2[0,1],scores_cg_test_loc2[1,0]]).mean()
-                
+                ctg_decoding_train[i, 0, model] = np.array(
+                    [scores_cg_train_loc2[0, 1], scores_cg_train_loc2[1, 0]]).mean()
+                ctg_decoding_test[i, 0, model] = np.array([scores_cg_test_loc2[0, 1], scores_cg_test_loc2[1, 0]]).mean()
+
                 # rotated decoding
-                ctg_decoding_train[i,1,model]  = np.array([scores_cg_train_loc1[0,1],scores_cg_train_loc1[1,0]]).mean()
-                ctg_decoding_test[i,1,model]  = np.array([scores_cg_test_loc1[0,1],scores_cg_test_loc1[1,0]]).mean()
-                
-                
+                ctg_decoding_train[i, 1, model] = np.array(
+                    [scores_cg_train_loc1[0, 1], scores_cg_train_loc1[1, 0]]).mean()
+                ctg_decoding_test[i, 1, model] = np.array([scores_cg_test_loc1[0, 1], scores_cg_test_loc1[1, 0]]).mean()
+
                 # decoder accuracy on withheld data from the same delay 
-                test_decoding_train[i,0,model] = np.array([scores_cg_train_loc2[0,0],scores_cg_train_loc2[1,1]]).mean()
-                test_decoding_test[i,0,model] = np.array([scores_cg_test_loc2[0,0],scores_cg_test_loc2[1,1]]).mean()
-                test_decoding_train[i,1,model] = np.array([scores_cg_train_loc1[0,0],scores_cg_train_loc1[1,1]]).mean()
-                test_decoding_test[i,1,model] = np.array([scores_cg_test_loc1[0,0],scores_cg_test_loc1[1,1]]).mean()
-                
-            
-    
-    
+                test_decoding_train[i, 0, model] = np.array(
+                    [scores_cg_train_loc2[0, 0], scores_cg_train_loc2[1, 1]]).mean()
+                test_decoding_test[i, 0, model] = np.array(
+                    [scores_cg_test_loc2[0, 0], scores_cg_test_loc2[1, 1]]).mean()
+                test_decoding_train[i, 1, model] = np.array(
+                    [scores_cg_train_loc1[0, 0], scores_cg_train_loc1[1, 1]]).mean()
+                test_decoding_test[i, 1, model] = np.array(
+                    [scores_cg_test_loc1[0, 0], scores_cg_test_loc1[1, 1]]).mean()
+
     # save the ctg scores
-    pickle.dump(ctg_decoding_train,open(load_path+'/ctg_decoding_train_rot_unrot.pckl','wb'))
-    pickle.dump(ctg_decoding_test,open(load_path+'/ctg_decoding_test_rot_unrot.pckl','wb'))
-    
+    # pickle.dump(ctg_decoding_train, open(load_path + '/ctg_decoding_train_rot_unrot.pckl', 'wb'))
+    # pickle.dump(ctg_decoding_test, open(load_path + '/ctg_decoding_test_rot_unrot.pckl', 'wb'))
+
     # save the test decoding scores
-    pickle.dump(test_decoding_train,open(load_path+'/test_decoding_train_rot_unrot.pckl','wb'))
-    pickle.dump(test_decoding_test,open(load_path+'/test_decoding_test_rot_unrot.pckl','wb'))
-    
+    # pickle.dump(test_decoding_train, open(load_path + '/test_decoding_train_rot_unrot.pckl', 'wb'))
+    # pickle.dump(test_decoding_test, open(load_path + '/test_decoding_test_rot_unrot.pckl', 'wb'))
+
     # export to csv for JASP
-    ctg_scores_jasp = pd.DataFrame(data=ctg_decoding_test.mean(0).T,columns = ['unrotated','rotated'])
-    ctg_scores_jasp.to_csv(load_path+'/ctg_decoding_test_jasp.csv')
-    
+    # ctg_scores_jasp = pd.DataFrame(data=ctg_decoding_test.mean(0).T, columns=['unrotated', 'rotated'])
+    # ctg_scores_jasp.to_csv(load_path + '/ctg_decoding_test_jasp.csv')
+
     # save the unrotated plane ixs
-    pickle.dump(same_ixs,open(load_path+'/unrot_plane_ixs_ctg_decoding.pckl','wb'))
-    
-    
+    # pickle.dump(same_ixs, open(load_path + '/unrot_plane_ixs_ctg_decoding.pckl', 'wb'))
+
     # plot the ctg scores for unrotated and rotated planes
-    plot_AI(constants.PARAMS,ctg_decoding_test.mean(0)[None,:,:],'unrotrot','cued')
-    plt.xticks([1.875,2.125],labels=['unrotated','rotated'])
+    plotter.plot_AI(constants, ctg_decoding_test.mean(0)[None, :, :], 'cued')
+    plt.xticks([1.875, 2.125], labels=['unrotated', 'rotated'])
     plt.ylabel('ctg decoding accuracy')
     plt.xlabel('Cued colour plane')
     plt.legend([])
-    
-    plt.savefig(constants.PARAMS['FIG_PATH']+'ctg_decoding_acc_rotunrot.png')
-    plt.savefig(constants.PARAMS['FIG_PATH']+'ctg_decoding_acc_rotunrot.svg')
-    
+
+    if constants.PLOT_PARAMS['save_plots']:
+        plt.savefig(constants.PARAMS['FIG_PATH'] + 'ctg_decoding_acc_rotunrot.png')
+        plt.savefig(constants.PARAMS['FIG_PATH'] + 'ctg_decoding_acc_rotunrot.svg')
+
     # run stats
     # contrast 1: unrotated > chance (0.5)
     print('Contrast 1: unrotated > chance (0.5)')
-    print('Mean = %.2f' %(ctg_decoding_test.mean(0)[0,:].mean()*100))
-    run_contrast_single_sample(ctg_decoding_test.mean(0)[0,:],[.5],alt='greater')
-    
+    print('Mean = %.2f' % (ctg_decoding_test.mean(0)[0, :].mean() * 100))
+    run_contrast_single_sample(ctg_decoding_test.mean(0)[0, :], [.5], alt='greater')
+
     # contrast 2: rotated =/= chance
     # note here we should be doing a Bayesian test - done in JASP
     print('Contrast 2: rotated =/= chance (0.5)')
-    print('Mean = %.2f' %(ctg_decoding_test.mean(0)[1,:].mean()*100))
-    run_contrast_single_sample(ctg_decoding_test.mean(0)[1,:],[.5],alt='two-sided')
-    
-    # contrast 3: unrotated > rotated 
-    
+    print('Mean = %.2f' % (ctg_decoding_test.mean(0)[1, :].mean() * 100))
+    run_contrast_single_sample(ctg_decoding_test.mean(0)[1, :], [.5], alt='two-sided')
+
+    # contrast 3: unrotated > rotated
     print('Contrast 3: unrotated > rotated (0.5)')
-    run_contrast_single_sample(ctg_decoding_test.mean(0)[0,:]-ctg_decoding_test.mean(0)[1,:],
-                               [0],alt='greater')
+    run_contrast_single_sample(ctg_decoding_test.mean(0)[0, :] - ctg_decoding_test.mean(0)[1, :],
+                               [0], alt='greater')
 
     return ctg_decoding_test, same_ixs
-    
