@@ -200,11 +200,6 @@ def train_model(params, data, device):
     # % initialise model
     model = RNN(params, device)
 
-    if not (params['from_scratch']):
-        # read in the pre-trained model
-        model_path = params['FULL_PATH'] + 'saved_models/'
-        model = load_model(model_path, params, device)
-
     # transfer model to the desired device
     model.to(device)
 
@@ -219,7 +214,6 @@ def train_model(params, data, device):
         optimizer = optim.Adam(model.parameters(), lr=params['learning_rate'])
     else:
         raise ValueError("Incorrect optimiser name. Choose from: 'SGD', 'SGDm', 'RMSprop', and 'Adam'.")
-
 
     # set the loss function
     if params['loss_fn'] == 'MSE':
@@ -251,25 +245,6 @@ def train_model(params, data, device):
     else:
         invalid_trials = None
 
-    if not params['from_scratch']:
-        # load training structures and append to them
-        f = open(params['FULL_PATH'] + 'training_data/' + 'training_data_model' + \
-                 str(params['model_number']) + '.pckl', 'rb')
-        track_training = pickle.load(f)
-        f.close()
-
-        loss_all = torch.cat((track_training['loss'].to(device), loss_all), -1)
-        loss_valid = torch.cat((track_training['loss_valid'].to(device), loss_valid), -1)
-        loss_epoch = torch.cat((track_training['loss_epoch'].to(device), loss_epoch), -1)
-        shuffling_order = torch.cat((track_training['shuffling_order'].to(device), shuffling_order), -1)
-        net_outputs = torch.cat((track_training['outputs'].to(device), net_outputs), -1)
-        if params['condition'] != 'deterministic':
-            invalid_trials = \
-                torch.cat((track_training['invalid_trials'].to(device),
-                           invalid_trials), 0)
-        n_previous_epochs = track_training['loss_epoch'].shape[0]
-
-
     inputs_base = data['inputs']
     inputs_base = inputs_base.to(device)
 
@@ -277,12 +252,7 @@ def train_model(params, data, device):
     targets = targets.to(device)
 
     window = params['conv_criterion']['window']
-
-
-    if params['from_scratch']:
-        epochs = range(params['n_epochs'])
-    else:
-        epochs = range(n_previous_epochs, n_previous_epochs + params['n_epochs'])
+    epochs = range(params['n_epochs'])
 
     # loop over epochs
     for ix, i in enumerate(epochs):
@@ -294,8 +264,8 @@ def train_model(params, data, device):
         if params['var_delays']:
             delay_mask = \
                 var_delay_mask(params['delay_mat'][shuffling_order[:, i], :],
-                               params,
-                               device)
+                               params)
+            delay_mask.to(device)
 
         # make some cues invalid
         if params['condition'] != 'deterministic':
@@ -1006,7 +976,7 @@ def var_delay_mask(delay_mat, params):
 
     Parameters
     ----------
-    delay_mat : array (n_trials,2)
+    delay_mat : torch.Tensor (n_trials, 2)
         Trial-wise delay length values in cycles, for both delays.
     params : dict
         Experiment parameters.
