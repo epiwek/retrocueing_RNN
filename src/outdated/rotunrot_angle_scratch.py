@@ -77,8 +77,8 @@ def get_plane_angle_cued_across_delays_common_space(params,cv=2):
         loc_split = params['B']
         for i in range(2):
             # bin the train and test datasets into colour bins
-            data_train = helpers.bin_data(eval_data['data'][train[i],:,:],params)
-            data_test = helpers.bin_data(eval_data['data'][test[i],:,:],params)
+            data_train = helpers.bin_data(params, eval_data['data'][train[i],:,:])
+            data_test = helpers.bin_data(params, eval_data['data'][test[i],:,:])
             
             delay1_train = data_train[:,d1_ix,:] 
             delay1_test = data_test[:,d1_ix,:] - data_test[:,d1_ix,:].mean()
@@ -508,7 +508,7 @@ def get_AI_cued_across_delays(params,cv=2):
 
 #%%
 
-from get_subspace_alignment_index import get_trial_ixs
+from subspace_alignment_index import get_trial_ixs
 
 
 
@@ -608,8 +608,8 @@ def get_error_angle_estimates(cv=2):
         loc_split = params['B']
         for i in range(2):
             # bin the train and test datasets into colour bins
-            data_train = helpers.bin_data(eval_data['data'][train[i],:,:],params)
-            data_test = helpers.bin_data(eval_data['data'][test[i],:,:],params)
+            data_train = helpers.bin_data(params, eval_data['data'][train[i],:,:])
+            data_test = helpers.bin_data(params, eval_data['data'][test[i],:,:])
             
             delay1_train = data_train[:,d1_ix,:]
             delay1_test = data_test[:,d1_ix,:] - data_test[:,d1_ix,:].mean()

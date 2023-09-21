@@ -8,332 +8,278 @@ Created on Mon Nov  2 23:07:28 2020
 import numpy as np
 from sklearn.metrics.pairwise import euclidean_distances
 from scipy.spatial import ConvexHull
-import pdb
+from scipy.linalg import orthogonal_procrustes
 
-def makeVec(point):
+
+def make_vec(point):
+    """
+    Turn a point into a vector, anchored at the origin.
+
+    :param np.ndarray point: point coordinates (n, )
+    :return: vec: (2, n)
+    """
     dim = point.shape[0]
-    vec = np.stack((np.zeros((dim,)),point))
+    vec = np.stack((np.zeros((dim,)), point))
     return vec
 
-def makePoint(vec):
-    point = vec[-1,:]
+
+def make_point(vec):
+    """
+    Turn a vector anchored at the origin into a point.
+    :param np.ndarray vec: (2, n)
+    :return: point (n, )
+    """
+    point = vec[-1, :]
     return point
 
-def getVecFromPoints(point1,point2):
-    vec = point2-point1
+
+def get_vec_from_points(point1, point2):
+    """
+    Calculate a vector that joins 2 points.
+
+    :param np.array point1: point 1 coordinates (n, )
+    :param np.array point2: point 2 coordinates (n, )
+    :return: vec (n, )
+    """
+    assert point2.shape == point2.shape, 'Both points must have the same number of dimensions.'
+    vec = point2 - point1
     return vec
-    
-def getProjection(point,plane_vecs):
-    '''
-    
+
+
+def get_projection(point, plane_vecs):
+    """
+    Project a point onto a plane defined by plane_vecs.
 
     Parameters
     ----------
-    point : TYPE
-        DESCRIPTION.
-    plane_vecs : TYPE
-        DESCRIPTION.
+    point : np.ndarray
+        Point coordinates (n_dims, ).
+    plane_vecs : np.ndarray
+        Vectors defining a plane (2, n_dims).
 
     Returns
     -------
-    point_proj : TYPE
-        DESCRIPTION.
+    point_proj : np.ndarray
+        Coordinates of the point projected onto the plane.
 
-    '''
+    """
     # get plane normal
-    normal = np.cross(plane_vecs[0,:],plane_vecs[1,:])
-    
+    normal = np.cross(plane_vecs[0, :], plane_vecs[1, :])
+
     # get point coordinates in the new basis, defined by the plane and its normal
-    new_basis = np.concatenate((plane_vecs,normal[None,:]))
+    new_basis = np.concatenate((plane_vecs, normal[None, :]))
     point_new_coords = new_basis @ point
-    
-    norm_scale = point_new_coords[-1] # scale the normal by the point coordinate along that direction
-    
-    # get vector going from point to projection onto the plane
-    # point_proj = point_new_coords - norm_scale*normal
-    
-    # point_proj = new_basis.T @ point_proj
-    
-    point_proj = point - norm_scale*normal
-    
+
+    norm_scale = point_new_coords[-1]  # scale the normal by the point coordinate along that direction
+
+    # find the projected coordinates
+    point_proj = point - norm_scale * normal
+
     return point_proj
 
-def sortByPathLength(verts):
-    if verts.shape[0]!=4:
-        raise NotImplementedError()
-        
+
+def sort_by_path_length(verts):
+    """
+    Sort a set of vertices to form a quadrilateral by the pairwise distances between them.
+
+    :param np.ndarray verts: vertices (4, n)
+    :return: sorted_verts, sorting_order
+    """
+    if verts.shape[0] != 4:
+        raise NotImplementedError('Only implemented for a set of 4 vertices.')
+
     sorted_verts = np.zeros((verts.shape))
     n_verts = verts.shape[0]
-    sorting_order = np.zeros((n_verts,),dtype=int)
-    
+    sorting_order = np.zeros((n_verts,), dtype=int)
+
     # get pairwise euclidean distances
     distances = euclidean_distances(verts)
-    
+
     # find points with the largest distance between and set them to be opposite corners of a quadrilateral
-    sorting_order[0] = np.where(distances==np.max(distances))[0][0]
-    sorting_order[2] = np.where(distances==np.max(distances))[1][0]
-                                    
+    sorting_order[0] = np.where(distances == np.max(distances))[0][0]
+    sorting_order[2] = np.where(distances == np.max(distances))[1][0]
+
     # sort the remaining indices by distances
     curr_point = sorting_order[0]
-    possible_neighbours = np.setdiff1d(range(4),sorting_order[[0,2]])
-    sorted_neighbours = np.argsort(distances[possible_neighbours,curr_point])
+    possible_neighbours = np.setdiff1d(range(4), sorting_order[[0, 2]])
+    sorted_neighbours = np.argsort(distances[possible_neighbours, curr_point])
     sorting_order[1] = possible_neighbours[sorted_neighbours[0]]
     sorting_order[3] = possible_neighbours[sorted_neighbours[1]]
-        
+
     for i in range(n_verts):
-         sorted_verts[i,:] = verts[sorting_order[i],:]
-    
+        sorted_verts[i, :] = verts[sorting_order[i], :]
+
     return sorted_verts, sorting_order
 
 
-def sortByVecAngle(verts):
-    if verts.shape[0]!=4:
-        raise NotImplementedError()
-    
-    sorted_verts = np.zeros((verts.shape))
-    n_verts = verts.shape[0]
-    
-    
-    # calculate centre of mass
-    com = np.mean(verts,axis=0)
-    
-    # express all verts as vectors going from com (normalise them too)
-    # calculate the angles between vector corresponding to vertex 1 and all the others
-    angles = []
-    origin = np.zeros(verts[0].shape)
-    v1 = np.stack((origin,verts[0,:]-com),axis=0)
-    v1 /= np.linalg.norm(v1) # make it a unit vector
-    
-    for n in range(n_verts-1):
-        v2 = np.stack((origin,verts[n+1,:]-com),axis=0)
-        v2 /= np.linalg.norm(v2)
-        
-        cos_theta = np.dot(v1[1,:],v2[1,:])
-        angles.append(cos_theta)
-    
-    angles = np.array(angles)
-    
-    sorting_order = np.concatenate((np.array([0]),np.argsort(angles)+1))
-    sorted_verts = verts[sorting_order,:]
-    
-    return sorted_verts, sorting_order
+def quadrilat_area(coords):
+    """
+    Calculate the area of a quadrilateral from its (3D) vertex coordinates.
+
+    :param np.ndarray coords: Coordinate array, shape: (n_colour_bins, 3)
+    :return: area
+    """
+    # get diagonals
+    ac = coords[2, :] - coords[0, :]
+    bd = coords[3, :] - coords[1, :]
+
+    # calculate area
+    area = np.linalg.norm(np.cross(ac, bd)) / 2
+    return area
 
 
-def defPlaneShape(verts,plane, project= False):
-    if verts.shape[0]!=4:
-        raise NotImplementedError()
-    
-    # if project == True:
-    #     proj = np.zeros(verts.shape)
-    #     for i in range(verts.shape[0]):
-    #         proj[i,:] = getProjection(verts[i,:],plane)
-    # else:
-    #     proj = verts
-    hull = ConvexHull(verts) # fit a convex hull to the projected points
-    #ignore the last coordinate - all points lie on the same plane and the function won't work if they're co-planar\
-    
-    sorting_order = hull.vertices
-    convex_verts = verts[sorting_order,:]
-    
-    return convex_verts,sorting_order
-    
+def construct_rot_matrix(u, theta):
+    """
+    Construct a rotation matrix from a rotation axis u and a rotation angle theta.
+    :param np.ndarray u: rotation axis in 3D (3, )
+    :param float theta: rotation angle
+    :return: R: rotation matrix
+    """
+    u_x = construct_x_prod_matrix(u)
+    R = np.cos(theta) * np.eye(3) + np.sin(theta) * u_x + (1 - np.cos(theta)) * np.outer(u, u)
+    return R
 
 
-# fig = plt.figure()
-# ax = fig.add_subplot(231,projection='3d')
-# ax.plot(proj[:,0],proj[:,1],proj[:,2],'ko')
-# ax.plot(proj[[0,1,2,3,0],0],proj[[0,1,2,3,0],1],proj[[0,1,2,3,0],2],'r-',alpha=0.2)
-
-# # fig = plt.figure()
-# ax = fig.add_subplot(232,projection='3d')
-# ax.plot(proj[:,0],proj[:,1],proj[:,2],'ko')
-# ax.plot(proj[[0,1,3,2,0],0],proj[[0,1,3,2,0],1],proj[[0,1,3,2,0],2],'r-',alpha=0.2)
-
-# # fig = plt.figure()
-# ax = fig.add_subplot(233,projection='3d')
-# ax.plot(proj[:,0],proj[:,1],proj[:,2],'ko')
-# ax.plot(proj[[0,2,1,3,0],0],proj[[0,2,1,3,0],1],proj[[0,2,1,3,0],2],'k-',alpha=0.2)
-
-# # fig = plt.figure()
-# ax = fig.add_subplot(234,projection='3d')
-# ax.plot(proj[:,0],proj[:,1],proj[:,2],'ko')
-# ax.plot(proj[[0,2,3,1,0],0],proj[[0,2,3,1,0],1],proj[[0,2,3,1,0],2],'g-',alpha=0.2)
-    
-# # fig = plt.figure()
-# ax = fig.add_subplot(235,projection='3d')
-# ax.plot(proj[:,0],proj[:,1],proj[:,2],'ko')
-# ax.plot(proj[[0,3,1,2,0],0],proj[[0,3,1,2,0],1],proj[[0,3,1,2,0],2],'k-',alpha=0.2)
-    
-# # fig = plt.figure()
-# ax = fig.add_subplot(236,projection='3d')
-# ax.plot(proj[:,0],proj[:,1],proj[:,2],'ko')
-# ax.plot(proj[[0,3,2,1,0],0],proj[[0,3,2,1,0],1],proj[[0,3,2,1,0],2],'k-',alpha=0.2)
-    
-    
-# #%%
-
-# hull = ConvexHull(proj[:,:2])
-
-# #%%
-# fig = plt.figure()
-# ax = fig.add_subplot(111,projection='3d')
-# ax.plot(verts[:,0],verts[:,1],verts[:,2],'ko')
-
-# ax.plot(proj[:,0],proj[:,1],proj[:,2],'ro')
+def construct_x_prod_matrix(u):
+    u_x = np.array([[0, -u[2], u[1]], [u[2], 0, -u[0]], [-u[1], u[0], 0]])
+    return u_x
 
 
-#     # plt.plot(proj[simplex,0],proj[simplex,1],proj[simplex,2],'r-')
-# plt.plot(proj[hull.vertices,0],proj[hull.vertices,1],proj[hull.vertices,2],'k-')
+def rotate_plane_by_angle(points, theta_degrees, axis='z'):
+    """
+    Rotates a set of points / a plane by a given degree around a given axis in 3D. Default axis is z.
+
+    :param np.ndarray points: 3D coordinates of the datapoints, shape: (n_points, 3)
+    :param float theta_degrees: angle of rotation
+    :param str axis: Optional. Axis around which to rootate the points. Choose from: 'x', 'y', 'z'. Default is 'z'.
+    :return points_rotated: Coordinates of the rotated datapoints (n_points, 3)
+    """
+
+    theta_radians = np.radians(theta_degrees)
+    R = np.eye(3)
+    if axis == 'z':
+        # construct rotation matrix - z component stays the same
+        R[:, 0] = np.array([np.cos(theta_radians), np.sin(theta_radians), 0])
+        R[:, 1] = np.array([-np.sin(theta_radians), np.cos(theta_radians), 0])
+    elif axis == 'x':
+        # construct rotation matrix - x component stays the same
+        R[:, 1] = np.array([0, np.cos(theta_radians), np.sin(theta_radians)])
+        R[:, 2] = np.array([0, -np.sin(theta_radians), np.cos(theta_radians)])
+    elif axis == 'y':
+        # construct rotation matrix - y component stays the same
+        R[:, 0] = np.array([np.cos(theta_radians), 0, -np.sin(theta_radians)])
+        R[:, 2] = np.array([np.sin(theta_radians), 0, np.cos(theta_radians)])
+
+    # note in the case of a 180-degree rotation, there will be a small numerical error for sin - the value won't be
+    # exactly 0 (but that's ok)
+
+    # apply rotation matrix to datapoints
+    points_rotated = R @ points.T
+
+    return points_rotated
 
 
-    
-# #%%
+def procrustes(data1, data2):
+    """
+    Procrustes analysis, a similarity test for two data sets. Each input matrix is a set of points or vectors (the rows
+    of the matrix). The dimension of the space is the number of columns of each matrix. Given two identically sized
+    matrices, procrustes standardizes both such that:
+    - :math:`tr(AA^{T}) = 1`.
+    - Both sets of points are centered around the origin.
+    Procrustes ([1]_, [2]_) then applies the optimal transform to the second
+    matrix (including scaling/dilation, rotations, and reflections) to minimize
+    :math:`M^{2}=\sum(data1-data2)^{2}`, or the sum of the squares of the
+    pointwise differences between the two input datasets.
+    This function was not designed to handle datasets with different numbers of
+    datapoints (rows).  If two data sets have different dimensionality
+    (different number of columns), simply add columns of zeros to the smaller
+    of the two.
 
-# plt.figure()
-# square = np.array([[0,0,1,1],[0,1,1,0]])
-# plt.plot(square,'o')
-# square = square.T
-# square = np.concatenate((square,np.zeros((square.shape[0],1))),1)
-# # com = np.expand_dims(np.mean(square,1),1)
-# # square = np.concatenate((square,com),1).T
-# #%%
+    This code is copied from the scipy.spatial package, with the only change being that it additionally returns the
+    rotation matrix R.
 
-# import matplotlib.pyplot as plt
+    Parameters
+    ----------
+    data1 : array_like
+        Matrix, n rows represent points in k (columns) space `data1` is the
+        reference data, after it is standardised, the data from `data2` will be
+        transformed to fit the pattern in `data1` (must have >1 unique points).
+    data2 : array_like
+        n rows of data in k space to be fit to `data1`.  Must be the  same
+        shape ``(numrows, numcols)`` as data1 (must have >1 unique points).
+    Returns
+    -------
+    mtx1 : array_like
+        A standardized version of `data1`.
+    mtx2 : array_like
+        The orientation of `data2` that best fits `data1`. Centered, but not
+        necessarily :math:`tr(AA^{T}) = 1`.
+    disparity : float
+        :math:`M^{2}` as defined above.
+    R : array_like
+        Rotation matrix that maps mtx1 to mtx2
+    Raises
+    ------
+    ValueError
+        If the input arrays are not two-dimensional.
+        If the shape of the input arrays is different.
+        If the input arrays have zero columns or zero rows.
+    See Also
+    --------
+    scipy.linalg.orthogonal_procrustes
+    scipy.spatial.distance.directed_hausdorff : Another similarity test
+      for two data sets
+    Notes
+    -----
+    - The disparity should not depend on the order of the input matrices, but
+      the output matrices will, as only the first output matrix is guaranteed
+      to be scaled such that :math:`tr(AA^{T}) = 1`.
+    - Duplicate data points are generally ok, duplicating a data point will
+      increase its effect on the procrustes fit.
+    - The disparity scales as the number of points per input matrix.
+    References
+    ----------
+    .. [1] Krzanowski, W. J. (2000). "Principles of Multivariate analysis".
+    .. [2] Gower, J. C. (1975). "Generalized procrustes analysis".
+    Examples
+    --------
+    The matrix ``b`` is a rotated, shifted, scaled and mirrored version of
+    ``a`` here:
+    #>>> a = np.array([[1, 3], [1, 2], [1, 1], [2, 1]], 'd')
+    #>>> b = np.array([[4, -2], [4, -4], [4, -6], [2, -6]], 'd')
+    #>>> mtx1, mtx2, disparity = procrustes(a, b)
+    #>>> round(disparity)
+    0.0
+    """
+    mtx1 = np.array(data1, dtype=np.double, copy=True)
+    mtx2 = np.array(data2, dtype=np.double, copy=True)
 
-# hull = ConvexHull(square,'Qt')
-# plt.plot(square[hull.vertices,0],square[hull.vertices,1],'r-')
-# # plt.plot(square[hull.vertices[0],0],square[hull.vertices[0],1],'r-')
+    if mtx1.ndim != 2 or mtx2.ndim != 2:
+        raise ValueError("Input matrices must be two-dimensional")
+    if mtx1.shape != mtx2.shape:
+        raise ValueError("Input matrices must be of same shape")
+    if mtx1.size == 0:
+        raise ValueError("Input matrices must be >0 rows and >0 cols")
 
+    # translate all the data to the origin
+    mtx1 -= np.mean(mtx1, 0)
+    mtx2 -= np.mean(mtx2, 0)
 
+    norm1 = np.linalg.norm(mtx1)
+    norm2 = np.linalg.norm(mtx2)
 
+    if norm1 == 0 or norm2 == 0:
+        raise ValueError("Input matrices must contain >1 unique points")
 
-# scratch code - rotating vectors
-# plt.figure()
-# ax1 = plt.subplot(111, projection='3d')
+    # change scaling of data (in rows) such that trace(mtx*mtx') = 1
+    mtx1 /= norm1
+    mtx2 /= norm2
 
+    # transform mtx2 to minimize disparity
+    R, s = orthogonal_procrustes(mtx1, mtx2)
+    mtx2 = np.dot(mtx2, R.T) * s
 
-# plane1_v1 = np.random.randn(3)
-# plane1_v1 /= np.linalg.norm(plane1_v1)
+    # measure the dissimilarity between the two datasets
+    disparity = np.sum(np.square(mtx1 - mtx2))
 
-# plane1_v2 = np.random.randn(3)
-# plane1_v2 /= np.linalg.norm(plane1_v2)
-
-# # orthogonalise the second vector
-# if np.abs(np.dot(plane1_v1,plane1_v2))>0.00001:
-#     plane1_v2 -= np.dot(plane1_v1,plane1_v2)*plane1_v1
-#     plane1_v2 /= np.linalg.norm(plane1_v2)
-
-
-# plane2_v1 = np.random.randn(3)
-# plane2_v1 /= np.linalg.norm(plane2_v1)
-
-# plane2_v2 = np.random.randn(3)
-# plane2_v2 /= np.linalg.norm(plane2_v2)
-
-# # orthogonalise the second vector
-# if np.abs(np.dot(plane2_v1,plane2_v2))>0.00001:
-#     plane2_v2 -= np.dot(plane2_v1,plane2_v2)*plane2_v1
-#     plane2_v2 /= np.linalg.norm(plane2_v2)
-
-
-# plane1_v1_v = vops.makeVec(plane1_v1)
-# plane1_v2_v = vops.makeVec(plane1_v2)
-# plane2_v1_v = vops.makeVec(plane2_v1)
-# plane2_v2_v = vops.makeVec(plane2_v2)
-
-
-
-# normal1 = np.cross(plane1_v1,plane1_v2)
-# normal2 = np.cross(plane2_v1,plane2_v2)
-
-# normal1_v = vops.makeVec(normal1)
-# normal2_v = vops.makeVec(normal2)
-
-
-# plt.figure()
-# ax1 = plt.subplot(111, projection='3d')
-# ax1.plot(plane1_v1_v[:,0],plane1_v1_v[:,1],plane1_v1_v[:,2],'r-')
-# ax1.plot(plane1_v2_v[:,0],plane1_v2_v[:,1],plane1_v2_v[:,2],'r--',label='plane1')
-
-# ax1.plot(plane2_v1_v[:,0],plane2_v1_v[:,1],plane2_v1_v[:,2],'k-')
-# ax1.plot(plane2_v2_v[:,0],plane2_v2_v[:,1],plane2_v2_v[:,2],'k--',label='plane2')
-
-# ax1.plot(normal1_v[:,0],normal1_v[:,1],normal1_v[:,2],'g-',label='normal1')
-# ax1.plot(normal2_v[:,0],normal2_v[:,1],normal2_v[:,2],'g--',label='normal2')
-
-# np.degrees(np.arccos(np.dot(normal1,normal2)))
-
-
-# plt.figure()
-# ax1 = plt.subplot(111, projection='3d')
-# ax1.plot(normal1_v[:,0],normal1_v[:,1],normal1_v[:,2],'g-',label='normal1')
-# ax1.plot(normal2_v[:,0],normal2_v[:,1],normal2_v[:,2],'g--',label='normal2')
-
-# normal3 = np.cross(normal1,normal2)
-# normal3_v = vops.makeVec(normal3)
-# ax1.plot(normal3_v[:,0],normal3_v[:,1],normal3_v[:,2],'b-',label='normal3')
-
-
-# np.degrees(np.arccos(np.dot(normal2,normal1)))
-
-# triple_prod = np.dot(normal1,np.cross(normal2,normal3))
-# triple_prod2 = np.dot(normal2,np.cross(normal1,normal3))
-
-
-
-# v1 = np.array([1,0,0])
-# v2 = np.array([.2,.9,0])
-# v2 /= np.linalg.norm(v2)
-
-# v1_v = vops.makeVec(v1)
-# v2_v = vops.makeVec(v2)
-
-# normal = np.cross(v1,v2)
-# normal_v = vops.makeVec(normal)
-
-# plt.figure()
-# ax1 = plt.subplot(111, projection='3d')
-# ax1.plot(v1_v[:,0],v1_v[:,1],v1_v[:,2],'g-',label='a')
-# ax1.plot(v2_v[:,0],v2_v[:,1],v2_v[:,2],'b-',label='b')
-# ax1.plot(normal_v[:,0],normal_v[:,1],normal_v[:,2],'k-',label='normal')
-
-#         # if they're not already - rotate vector b 
-#         # angle = np.arccos(np.dot(a,b))
-        
-#         # # a bit of a brute force approach here - try a positive angle first
-#         # angle_diff = np.pi/2 - angle
-#         # tmp = rotate_plane_by_angle(b_newBasis,angle_diff)
-        
-#         # # check vectors orthogonal
-#         # if np.abs(np.dot(a_newBasis,tmp)) > 0.001:
-#         #     # if not - try rotating by the same angle but in the opposite direction
-#         #     tmp = rotate_plane_by_angle(b_newBasis,-angle_diff)
-        
-#         # if np.abs(np.dot(a_newBasis,tmp)) > 0.001:
-#         #     raise ValueError('New vectors still not orthogonal')
-#         # else:
-#         #     b_newBasis = tmp
-        
-#         # if they're not already - rotate vector b
-#         # get directional angle between a and b
-# triple_product = np.dot(v1,np.cross(v2,normal))
-
-# if triple_product >= 0:
-#     angle = np.arccos(np.dot(v1,v2))
-# else:
-#     angle = 2*np.pi - np.arccos(np.dot(a_newBasis,b_newBasis))
-
-# if angle < np.pi/2:
-#     angle_diff = np.pi/2 - angle
-#     tmp = rotate_plane_by_angle(b_newBasis,angle_diff)
-# else:
-#     angle_diff = angle - np.pi/2
-#     tmp = rotate_plane_by_angle(b_newBasis,-angle_diff)
-
-# if np.abs(np.dot(a_newBasis,tmp)) > 0.001:
-#     raise ValueError('New vectors still not orthogonal')
-# else:
-#     b_newBasis = tmp
-
-
-
+    return mtx1, mtx2, disparity, R, s

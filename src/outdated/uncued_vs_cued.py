@@ -13,9 +13,7 @@ from sklearn.decomposition import PCA
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import vec_operations as vops
 import pickle
-import os.path
 from rep_geom import *
-import seaborn as sns
 from rep_geom import get_best_fit_plane, get_angle_between_planes
 import pycircstat
 from scipy.spatial import ConvexHull
@@ -77,7 +75,7 @@ def plot_subspace(ax,points,plane_vecs,fc='k',a=0.2):
     #return verts, sorted_verts
 #%%
 import helpers
-from analysis import make_rdm, fit_mds_to_rdm
+from src.outdated.analysis import make_rdm, fit_mds_to_rdm
 
 model_type = 'RNN'
     
