@@ -134,26 +134,13 @@ def make_stimuli_vonMises(params, epoch='train'):
     c1p = torch.tensor(c1p)
     c2p = torch.tensor(c2p)
 
-    # targets for MSE Loss
-    if params['target_type'] == 'Gaussian':
-        T = torch.zeros((params['stim_set_size'], params['n_colCh']))  # for MSE loss
-        T[:params['stim_set_size'] // 2] = c1p[:params['stim_set_size'] // 2, :]  # location 0 trials
-        T[params['stim_set_size'] // 2:] = c2p[params['stim_set_size'] // 2:, :]  # location 1 trials
-    elif params['target_type'] == 'class_label':
-        T = torch.zeros((params['stim_set_size'],))
-        T[:params['stim_set_size'] // 2] = torch.max(c1p[:params['stim_set_size'] // 2, :], 1)[1]
-        T[params['stim_set_size'] // 2:] = torch.max(c2p[params['stim_set_size'] // 2:, :], 1)[1]
-        T = T.type(torch.long)
+    # targets
+    T = torch.empty((params['stim_set_size'],))
+    T[:params['stim_set_size'] // 2] = phi[torch.max(c1p[:params['stim_set_size'] // 2, :], 1)[1]]
+    T[params['stim_set_size'] // 2:] = phi[torch.max(c2p[params['stim_set_size'] // 2:, :], 1)[1]]
 
-        c1_label = torch.max(c1p, 1)[1]
-        c2_label = torch.max(c2p, 1)[1]
-    elif params['target_type'] == 'angle_val':
-        T = torch.empty((params['stim_set_size'],))
-        T[:params['stim_set_size'] // 2] = phi[torch.max(c1p[:params['stim_set_size'] // 2, :], 1)[1]]
-        T[params['stim_set_size'] // 2:] = phi[torch.max(c2p[params['stim_set_size'] // 2:, :], 1)[1]]
-
-        c1_label = torch.max(c1p, 1)[1]
-        c2_label = torch.max(c2p, 1)[1]
+    c1_label = torch.max(c1p, 1)[1]
+    c2_label = torch.max(c2p, 1)[1]
 
     # dynamic input
     n_channels = params['n_colCh'] * 2 + 2  # stimuli + cues
