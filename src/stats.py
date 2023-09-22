@@ -8,7 +8,8 @@ This script contains custom statistical functions and wrappers.
 @author: emilia
 """
 import numpy as np
-from scipy.stats import shapiro, ttest_ind, ttest_1samp, mannwhitneyu, wilcoxon
+from scipy.stats import shapiro, ttest_ind, ttest_1samp, mannwhitneyu, wilcoxon, chi2, pearsonr
+
 
 
 def get_sem(data, dim=0):
@@ -41,6 +42,50 @@ def cohens_d(data1, data2):
     u1, u2 = np.mean(data1), np.mean(data2)
     # calculate the effect size
     return (u1 - u2) / s
+
+
+def corrcl(circ_var, l_var):
+    """
+    Calculate the correlation coefficient between a circular and linear variable.
+    Removes NaNs from the dataset.
+
+    Parameters
+    ----------
+    circ_var : array (n_samples,)
+        vector containing the circular variable entries in radians.
+    l_var : array (n_samples,)
+        vector containing the linear variable entries.
+
+    Returns
+    -------
+    rcl : float
+        Correlation coefficient.
+    p_val : float
+        Probability value.
+
+    """
+    # get rid of nans
+    nan_ix = np.where(np.isnan(l_var))[0]
+    clean_ix = np.setdiff1d(np.arange(len(circ_var)), nan_ix)
+
+    # get the sin and cos of circular samples
+    sines = np.sin(circ_var[clean_ix])
+    cosines = np.cos(circ_var[clean_ix])
+
+    # calculate the partial correlation coefficient
+    rcx, p1 = pearsonr(cosines, l_var[clean_ix])
+    rsx, p2 = pearsonr(sines, l_var[clean_ix])
+    rcs, p3 = pearsonr(sines, cosines)
+
+    # calculate the full correlation coefficient
+    rcl = np.sqrt((rcx ** 2 + rsx ** 2 - 2 * rcx * rsx * rcs) / (1 - rcs ** 2))
+
+    # calculate the test statistic and check significance value
+    test_stat = len(clean_ix) * rcl ** 2
+    df = 2
+    p_val = 1 - chi2.cdf(test_stat, df)
+
+    return rcl, p_val
 
 
 def run_contrast_single_sample(data, h_mean, alt='greater', try_log_transform=False):
