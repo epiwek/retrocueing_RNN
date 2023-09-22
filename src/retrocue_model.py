@@ -196,31 +196,16 @@ def train_model(params, data, device):
     # set seed for reproducibility
     torch.manual_seed(params['model_number'])
 
-    # % initialise model
+    # initialise model
     model = RNN(params, device)
 
     # transfer model to the desired device
     model.to(device)
 
     # set the optimiser
-    if params['optim'] == 'SGD':
-        optimizer = optim.SGD(model.parameters(), lr=params['learning_rate'])  # ,momentum=.9)
-    elif params['optim'] == 'SGDm':
-        optimizer = optim.SGD(model.parameters(), lr=params['learning_rate'], momentum=.9)
-    elif params['optim'] == 'RMSprop':
-        optimizer = optim.RMSprop(model.parameters(), lr=params['learning_rate'])
-    elif params['optim'] == 'Adam':
-        optimizer = optim.Adam(model.parameters(), lr=params['learning_rate'])
-    else:
-        raise ValueError("Incorrect optimiser name. Choose from: 'SGD', 'SGDm', 'RMSprop', and 'Adam'.")
+    optimizer = optim.RMSprop(model.parameters(), lr=params['learning_rate'])
 
-    # set the loss function
-    if params['loss_fn'] == 'MSE':
-        loss_fn = torch.nn.MSELoss()
-    elif params['loss_fn'] == 'CEL':
-        loss_fn = torch.nn.CrossEntropyLoss()
-
-
+    # pre-allocate some tensors
     n_valid_trials = int(params['cue_validity'] * params['stim_set_size'])
     n_invalid_trials = params['stim_set_size'] - n_valid_trials
 
@@ -236,21 +221,18 @@ def train_model(params, data, device):
                                params['n_colCh'],
                                params['n_epochs'])).to(device)
 
-    # mean and std of hidden activations on the first trial of each batch
-    hidden_stats = torch.empty((params['n_epochs'],
-                                params['seq_len'], 2)).to(device)
-
     if params['condition'] != 'deterministic':
         invalid_trials = torch.empty((params['n_epochs'], n_invalid_trials)).to(device)
     else:
         invalid_trials = None
 
+    # extract the inputs and targets and put on the device
     inputs_base = data['inputs']
     inputs_base = inputs_base.to(device)
-
     targets = data['targets']
     targets = targets.to(device)
 
+    # set the convergence criterion parameters
     window = params['conv_criterion']['window']
     epochs = range(params['n_epochs'])
 
@@ -260,8 +242,10 @@ def train_model(params, data, device):
         # shuffle dataset for SGD
         shuffling_order[:, i] = \
             torch.randperm(params['stim_set_size'], dtype=torch.long).to(device)
-        # determine the delay durations on each trial
+
         if params['var_delays']:
+            # Experiment 3: variable delay condition
+            # determine the delay durations on each trial
             delay_mask = \
                 var_delay_mask(params['delay_mat'][shuffling_order[:, i], :],
                                params)
@@ -269,11 +253,11 @@ def train_model(params, data, device):
         else:
             delay_mask = None
 
-        # make some cues invalid
         if params['condition'] != 'deterministic':
+            # make some cues invalid
             inputs = inputs_base.clone()  # create a copy of the inputs
             inputs, ixs = change_cue_validity(inputs, params)  # change some trials
-            # saved the ixs
+            # save the ixs
             invalid_trials[i, :] = torch.tensor(ixs)
         else:
             inputs = inputs_base
@@ -288,47 +272,34 @@ def train_model(params, data, device):
             outputs, o, hidden = \
                 model(trial_input.unsqueeze(1))
 
-            if np.logical_and(trial == 0, i == 0):
-                print('First forward pass')
-                print('    Means:')
-                print(torch.std_mean(o, -1)[0].squeeze())
-                print('    S.d.:')
-                print(torch.std_mean(o, -1)[1].squeeze())
+            # print the mean and sd of the hidden activity on the last timestep on the first forward pass
+            # if np.logical_and(trial == 0, i == 0):
+            #     print('First forward pass')
+            #     print('    Means:')
+            #     print(torch.std_mean(o, -1)[0].squeeze())
+            #     print('    S.d.:')
+            #     print(torch.std_mean(o, -1)[1].squeeze())
 
             # Compute loss
-            if params['target_type'] == 'Gaussian':
-                loss = loss_fn(outputs.unsqueeze(0),
-                               targets
-                               [shuffling_order
-                                [trial, i], :].unsqueeze(0))
-            elif params['target_type'] == 'class_label':
-                loss = loss_fn(outputs.unsqueeze(0),
-                               targets[shuffling_order[trial, i]].unsqueeze(0))
-            elif params['target_type'] == 'angle_val':
-                loss = custom_MSE_loss(params, outputs, targets[shuffling_order[trial, i]])
-            else:
-                raise ValueError("Incorrect target type. Choose from 'Gaussian', 'class_label' and 'angle_val'.")
+            loss = custom_MSE_loss(params, outputs, targets[shuffling_order[trial, i]])
 
             # Keep track of outputs and loss
-            if params['target_type'] == 'angle_val':
-                loss_all[trial, i] = loss.detach()
-            else:
-                loss_all[trial, i] = loss.item()
-
+            loss_all[trial, i] = loss.detach()
             net_outputs[trial, :, i] = outputs.detach()
             # Compute gradients
             optimizer.zero_grad()
             loss.backward()
             # Update weights
             optimizer.step()
+
+        # save loss into array
         if params['condition'] != 'deterministic':
             valid_ix = torch.from_numpy(np.setdiff1d(np.arange(params['stim_set_size']), invalid_trials[i, :]))
-
         else:
             valid_ix = torch.arange(params['stim_set_size'])
 
         if len(valid_ix) != n_valid_trials:
-            ValueError('loss_valid has a wrong pre-allocated size!')
+            raise ValueError('loss_valid has a wrong pre-allocated size!')
 
         loss_valid[:, i] = loss_all[valid_ix, i]
 
@@ -348,9 +319,7 @@ def train_model(params, data, device):
                   % (int(params['model_number']),
                      loss_epoch[i]))
 
-        # if loss reaches the required level, stop training
-
-        # select the loss values to be used for the convergence criterion
+        # check if convergence criterion satisfied
         if params['criterion_type'] == 'abs_loss':
             criterion_reached = (loss_epoch[i] <= params['MSE_criterion'])
         elif params['criterion_type'] == 'loss_der':
@@ -362,6 +331,7 @@ def train_model(params, data, device):
         else:
             raise ValueError('Specify which convergence criterion to use')
 
+        # if loss reaches the required level, stop training
         if criterion_reached:
             print('Model %2d converged after %d epochs. End loss = %.5f' % (int(params['model_number']), i + 1,
                                                                             loss_epoch[i]))
@@ -376,8 +346,7 @@ def train_model(params, data, device):
 
     # save training data
     track_training = {'loss': loss_all, 'loss_valid': loss_valid, 'loss_epoch': loss_epoch,
-                      'shuffling_order': shuffling_order, 'outputs': net_outputs, 'hidden_stats': hidden_stats}
-    # mean and std of hidden activations on the first trial of each batch
+                      'shuffling_order': shuffling_order, 'outputs': net_outputs}
     # track_training['dLoss'] = dLoss
     # track_training['loss_clean'] = loss_clean
 
@@ -387,99 +356,6 @@ def train_model(params, data, device):
     return model, track_training
 
 
-# def partial_training(params,data,trial_sequence,device):
-#     """
-#     Train the RNN model up to some point using a fixed trial order sequence and
-#     save it.
-
-#     Parameters
-#     ----------
-
-#     params : dictionary 
-
-#     loss_fn : torch.nn modeule
-
-#     data : dictionary
-
-#     trial_sequence: numpy array, contains shuffling order of trials used for SGD
-
-
-#     Returns
-#     -------
-#     model : torch object
-#         Object created by the sklearn.decomposition.PCA method.
-#         fitted_plane.components_ gives the plane vectors
-#     """
-#     # set seed for reproducibility
-#     torch.manual_seed(params['model_number'])
-
-#     #% initialise model
-#     # model, net_type = define_model(params['n_inp'],
-#     #                                params['n_rec'],
-#     #                                params['n_colCh'])
-
-#     # transfer model to GPU if available
-#     model.to(device)
-
-#     if params['optim'] == 'SGD':
-#         optimizer = optim.SGD(model.parameters(),lr=params['learning_rate'])#,momentum=.9)
-#     elif params['optim'] == 'SGDm':
-#         optimizer = optim.SGD(model.parameters(),lr=params['learning_rate'],momentum=.9)
-#     elif params['optim'] == 'RMSprop':
-#         optimizer = optim.RMSprop(model.parameters(),lr=params['learning_rate'])
-
-
-#     if params['loss_fn'] == 'MSE':
-#         loss_fn = torch.nn.MSELoss()
-#     elif params['loss_fn'] == 'CEL':
-#         loss_fn = torch.nn.CrossEntropyLoss()
-
-
-#     track_training = {}
-#     track_training['loss'] = torch.zeros(params['batch_size'],params['n_epochs'])
-#     track_training['shuffling_order'] = torch.zeros((params['batch_size'],
-#                                                      params['n_epochs']),
-#                                                     dtype=torch.long)
-#     track_training['outputs'] = torch.zeros((params['batch_size'],
-#                                              params['n_colCh'],
-#                                              params['n_epochs']))
-#      # loop over epochs
-#     for i in range(params['n_epochs']):            
-#             # shuffle dataset for SGD
-
-#             # loop over training examples
-#             for trial in range(params['batch_size']):
-
-#                 outputs, o, hidden = \
-#                     model(data['inputs'][:,trial_sequence[trial,i],:].unsqueeze(1))
-
-
-#                 # Compute loss
-#                 loss = loss_fn(outputs.unsqueeze(0), 
-#                                data['targets']
-#                                [trial_sequence[trial,i],:].unsqueeze(0))
-#                 # Keep track of outputs and loss
-#                 track_training['loss'][trial,i] = loss.item()
-#                 track_training['outputs'][trial,:,i] = outputs.detach()
-#                 # Compute gradients
-#                 optimizer.zero_grad()
-#                 loss.backward()
-#                 # Update weights
-#                 optimizer.step()
-
-#             # print progress
-#             if (i%100 == 0):
-#                 print('Model %2d :    %.2f%% iterations of SGD completed...loss = %.2f' \
-#                           % (int(params['model_number']),
-#                              100* (i + 1) / params['n_epochs'],
-#                              torch.sum(track_training['loss'][:,i])))
-#             if (i==params['n_epochs']-1):
-#                 print('Model %2d :    100%% iterations of SGD completed...loss = %.2f' \
-#                           % (int(params['model_number']),
-#                              torch.sum((track_training['loss'][:,i]))))
-#     return model, track_training
-
-
 def save_model(path, params, model, track_training):
     """
     Save the torch model along with the training data.
@@ -487,7 +363,7 @@ def save_model(path, params, model, track_training):
     Parameters
     ----------
     path : str
-        Path to the experiment folder.
+        Path to the main data folder.
     params : dict
         Experiment parameters.
     model : torch object
@@ -509,14 +385,11 @@ def save_model(path, params, model, track_training):
     helpers.check_path(data_path)
 
     # save model
-    torch.save(model, model_path + 'model' + str(params['model_number']))
-    torch.save(model.state_dict(), model_path + 'model' +
-               str(params['model_number']) + '_statedict')
-    # save training data, including loss    
-    f = open(data_path + 'training_data_model' +
-             str(params['model_number']) + '.pckl', 'wb')
-    pickle.dump(track_training, f)
-    f.close()
+    torch.save(model, f"{model_path}model{params['model_number']}")
+    torch.save(model.state_dict(), f"{model_path}model{str(params['model_number'])}_statedict")
+    # save training data, including loss
+    with open(f"{data_path}training_data_model{ str(params['model_number'])}.pckl", 'wb') as f:
+        pickle.dump(track_training, f)
 
     print('Model saved')
 
@@ -543,13 +416,13 @@ def load_model(path, params, device):
 
     if device.type == 'cuda':
         model = RNN(params, device)
-        model.load_state_dict(torch.load(path + 'model' + str(params['model_number']) + '_statedict'))
+        model.load_state_dict(torch.load(f"{path}model{str(params['model_number'])}_statedict"))
     else:
         # for some reason cannot load models straight from file with:
         # model = torch.load(path + 'model' + str(params['model_number']), map_location=torch.device('cpu'))
-        # replaced with:
+        # so replaced it with:
         model = RNN(params, device)
-        model.load_state_dict(torch.load(path + 'model' + str(params['model_number'])+'_statedict'))
+        model.load_state_dict(torch.load(f"{path}model{str(params['model_number'])}_statedict"))
 
     print('.... Loaded')
     return model
@@ -856,7 +729,7 @@ def export_behav_data_to_matlab(params):
 
         choices = torch.stack(choices)
 
-        #% export to matlab
+        # export to matlab
         data_for_matlab = {'reported_colour': choices.numpy(),
                            'probed_colour': probed_colour.numpy(),
                            'unprobed_colour': unprobed_colour.numpy()}
@@ -960,7 +833,7 @@ def var_delay_mask(delay_mat, params):
 
     Returns
     -------
-    delay_mask : array
+    delay_mask : torch.Tensor
         Boolean mask for the input data array modifying the delay lengths on each trial.
 
     """
@@ -1091,7 +964,7 @@ def custom_MSE_loss(params, output, target_scalar):
 
     Returns
     -------
-    loss : float
+    loss : torch.Tensor
         Loss value.
 
     """
