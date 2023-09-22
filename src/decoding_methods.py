@@ -8,7 +8,7 @@ Created on Tue Feb 23 17:58:34 2021
 This file contains all decoding analysis functions, including:
     1) decoding of uncued stimulus colour in the post-cue delay
     2) cross-temporal decoding
-    3) comparison of  maintenance mechanisms between models from expts 1 & 2
+    3) comparison of  maintenance mechanisms between models from Experiments 1 & 2
     4) single-readout hypothesis : cross-decoding of cued colours across two parallel planes
     5) analogue to the CDI analysis: compare the discriminability of colour 
         representations pre-cue, after they are cued and uncued
@@ -21,13 +21,13 @@ This file contains all decoding analysis functions, including:
 2) This analysis computes the cross-temporal decoding accuracy scores for the
     cued items across the entire trial duration.
 3) This analysis calculates the mean delay cross-temporal generalisation scores and 
-    compares those between expts 1 & 2 to assess whether the networks trained 
+    compares those between Experiments 1 & 2 to assess whether the networks trained
     with variable delay lengths (expt 2) form a more temporally stable working 
     memory code than those trained with fixed delays (expt 1).
 4) This analysis asks if a common linear readout can be used to extract the cued
     colour information across both the cue-1 and cue-2 trials.
 5) This analysis seeks to confirm the conclusion from Fig. 3H whilst taking 
-    into account the noise in the representatioons. Linear decoders are trained
+    into account the noise in the representations. Linear decoders are trained
     in cross-validation to discriminate between colours in the pre-cue delay, 
     as well as after they are cued or uncued, and the test scores compared 
     between the 3 conditions.
@@ -35,7 +35,7 @@ This file contains all decoding analysis functions, including:
     of the pre-cue planes being rotated to form the parallel plane geometry in 
     the post-cue delay. Like for the corresponding AI analysis, this analysis
     is done in 2-fold cross-validation. Cross-temporal generalisation decoders 
-    are fitted to haf the data, to finf the putative 'rotated' and 'unrotated' 
+    are fitted to haf the data, to find the putative 'rotated' and 'unrotated'
     planes. Then, the analysis is repeated on the second half of the data, and 
     scores for the 'rotated' and 'unrotated' planes saved. If all models 
     consistently rotate noy one of the planes, then the 'unrotated' plane scores
@@ -50,7 +50,7 @@ import pandas as pd
 import itertools
 import matplotlib.pyplot as plt
 from itertools import combinations
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LinDiscrAn
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -96,7 +96,7 @@ def lda(X, y, cv=2):
         trial_ix = np.where(np.logical_or(y == y1, y == y2))[0]
 
         # make classifier pipeline
-        clf = make_pipeline(StandardScaler(), LDA())
+        clf = make_pipeline(StandardScaler(), LinDiscrAn())
 
         # fit a classifier in cross-val
         results = cross_validate(clf, X[trial_ix, :], y[trial_ix],
@@ -138,8 +138,8 @@ def lda_cg(X1, y1, X2, y2, cv=2):
         trial_ix_y2 = np.where(np.logical_or(y2 == l1, y2 == l2))[0]
 
         # make classifier pipelines
-        clf1 = make_pipeline(StandardScaler(), LDA())
-        clf2 = make_pipeline(StandardScaler(), LDA())
+        clf1 = make_pipeline(StandardScaler(), LinDiscrAn())
+        clf2 = make_pipeline(StandardScaler(), LinDiscrAn())
 
         # fit classifiers in cross-val
         results1 = cross_validate(clf1,
@@ -192,7 +192,7 @@ def lda_cg_time(X, y):
         test_ix = np.where(np.logical_or(y_test == y1, y_test == y2))[0]
 
         # make classifier pipeline
-        clf = make_pipeline(StandardScaler(), LDA())
+        clf = make_pipeline(StandardScaler(), LinDiscrAn())
         time_gen = GeneralizingEstimator(clf)
 
         # fit the classifier
@@ -256,7 +256,7 @@ def extract_delay_data(delay_ix, eval_data):
     """
     Extract the data corresponding to the required timepoint(s).
 
-    :param int or list delay_ix:
+    :param int or list or np.ndarray delay_ix: index (indices) of the required timepoints
     :param dict eval_data: Data dictionary. Must contain a key 'data' with a data array of shape (m, n_timepoints, n)
     :return: delay_data: Data array containing the subset of the data corresponding to the required trial timepoint(s),
         shape: (m, len(delay_ix), n)
@@ -289,7 +289,7 @@ def get_colour_labels(constants, eval_data, item_status='cued', trial_type='vali
     if item_status in ['uncued', 'unprobed']:
         labels = np.concatenate((eval_data["labels"]["c2"][:n_trials // 2],
                                  eval_data["labels"]["c1"][n_trials // 2:]))
-    else :
+    else:
         # 'probed', 'cued'
         labels = np.concatenate((eval_data['labels']['c1'][:n_trials // 2],
                                  eval_data['labels']['c2'][n_trials // 2:]), 0)
@@ -374,7 +374,6 @@ def model_looper(constants, delay_name, pipeline_func, item_status, trial_type='
     for model_number in range(constants.PARAMS['n_models']):
         print(f"Model {model_number}/{constants.PARAMS['n_models']}")
         model_scores.append(pipeline_func(constants, model_number, delay_name, item_status, trial_type, **kwargs))
-    #     pickle.dump(model_scores, open(load_path + '/decoding_acc_' + fname_str + '_delay.pckl', 'wb'))
 
     model_scores = np.stack(model_scores)
     return model_scores
@@ -443,7 +442,7 @@ def run_decoding_pipeline_single_model(constants, model_number, delay_name, item
     :param str trial_type: Optional. Type of trials for which to run the analysis. Choose from 'valid' and 'invalid'.
         Default is 'valid'.
     :param bool cg: Optional. If True, runs a cross-generalising decoder (i.e. fits the decoder to the dataset
-        corresponding to one condition (location), and tests it on a different condition. Default is False, which fits
+        corresponding to one condition (location), and tests it on a different condition). Default is False, which fits
         and tests the decoder on a dataset corresponding to a single condition (testing is done on withheld trials).
     :return: model_scores: array with decoder test scores for the given model.
     """
@@ -492,7 +491,7 @@ def run_decoding_uncued_analysis(constants, trial_type='valid'):
 
     # run contrast - test against chance decoding (50%)
     print('...Run contrast: mean test decoding significantly greater than chance (0.5) ')
-    run_contrast_single_sample(model_scores, [0.5])
+    run_contrast_single_sample(model_scores, 0.5)
 
     print('...Mean decoding accuracy: %.4f' % model_scores.mean())
 
@@ -595,7 +594,7 @@ def run_ctg_analysis(constants, trial_type='valid', delay_length=7):
         plt.savefig(f"{constants.PARAMS['FIG_PATH']}cross_temp_decoding_alltimepoints{cond_name}.png")
         plt.savefig(f"{constants.PARAMS['FIG_PATH']}cross_temp_decoding_alltimepoints{cond_name}.svg")
 
-# %% 3) compare maintenance mechanisms between expts 1 & 3
+# %% 3) compare maintenance mechanisms between Experiments 1 & 3
 
 
 def get_delay_timepoints():
@@ -635,7 +634,7 @@ def get_delay_timepoints():
 def get_mean_delay_scores():
     """
     Calculate the mean diagonal and off-diagonal decoding scores for all models.
-    return: diag_scores, off_diag_scores
+    :return: diag_scores, off_diag_scores
     """
     import constants.constants_expt1 as c1
     import constants.constants_expt3 as c3
@@ -677,11 +676,11 @@ def run_all_contrasts(off_diag_scores, diag_scores):
     """
     # contrast 1: test variable delays off-diagonal mean against chance (0.5)
     print('...Contrast 1: Variable delays mean ctg decoding > chance')
-    run_contrast_single_sample(off_diag_scores[:, 0], h_mean=[.5], alt='greater')
+    run_contrast_single_sample(off_diag_scores[:, 0], h_mean=.5, alt='greater')
     print('... mean = %.2f' % off_diag_scores[:, 0].mean())
     # contrast 2: test fixed delays off-diagonal mean against chance (0.5)
     print('...Contrast 2: Fixed delays mean ctg decoding > chance')
-    run_contrast_single_sample(off_diag_scores[:, 1], h_mean=[.5], alt='greater')
+    run_contrast_single_sample(off_diag_scores[:, 1], h_mean=.5, alt='greater')
     print('... mean = %.2f' % off_diag_scores[:, 1].mean())
     # contrast 3: test if mean off-/diagonal ratio for variable delays > fixed delays
     print('...Contrast 3: Variable delays mean ratio off-/diagonal decoding > fixed delays')
@@ -698,7 +697,7 @@ def run_maintenance_mechanism_analysis():
     form a more temporally stable working memory code than those trained with fixed delays (Expt 1).
     """
 
-    print('Comparing the memory maintenance mechanisms between expts 1 & 3')
+    print('Comparing the memory maintenance mechanisms between Experiments 1 & 3')
     # calculate the off- and on-diagonal decoding scores
     diag_scores, off_diag_scores = get_mean_delay_scores()
 
@@ -786,7 +785,7 @@ def run_colour_discrim_analysis(constants, trial_type='valid'):
     # load the post-cue (uncued and cued) test accuracies from file
     data_path = f"{constants.PARAMS['FULL_PATH']}pca_data/{trial_type}_trials/"
     pickle.dump(all_scores, open(data_path + 'cdi_analogous_decoding_scores.pckl', 'wb'))
-    # export to csv for jasp
+    # export to csv for JASP
     scores_tbl = pd.DataFrame(all_scores, columns=labels)
     scores_tbl.to_csv(data_path + 'cdi_analogous_decoding_scores.csv')
 
@@ -795,7 +794,7 @@ def run_colour_discrim_analysis(constants, trial_type='valid'):
         # contrasts - ran in JASP
         # rg.test_CDI_contrasts(constants, scores_tbl)
 
-        # plot (as units of standard normal distr)
+        # plot (as units of standard normal distribution)
         all_scores_transf = norm.ppf(all_scores)
         all_scores_transf_df = pd.DataFrame(all_scores_transf, columns=labels)
 
@@ -1005,17 +1004,16 @@ def get_decoding_unrotrot(constants, cv=2):
     # contrast 1: unrotated > chance (0.5)
     print('Contrast 1: unrotated > chance (0.5)')
     print('Mean = %.2f' % (ctg_decoding_test.mean(0)[0, :].mean() * 100))
-    run_contrast_single_sample(ctg_decoding_test.mean(0)[0, :], [.5], alt='greater')
+    run_contrast_single_sample(ctg_decoding_test.mean(0)[0, :], .5, alt='greater')
 
     # contrast 2: rotated =/= chance
     # note here we should be doing a Bayesian test - done in JASP
     print('Contrast 2: rotated =/= chance (0.5)')
     print('Mean = %.2f' % (ctg_decoding_test.mean(0)[1, :].mean() * 100))
-    run_contrast_single_sample(ctg_decoding_test.mean(0)[1, :], [.5], alt='two-sided')
+    run_contrast_single_sample(ctg_decoding_test.mean(0)[1, :], .5, alt='two-sided')
 
     # contrast 3: unrotated > rotated
     print('Contrast 3: unrotated > rotated (0.5)')
-    run_contrast_single_sample(ctg_decoding_test.mean(0)[0, :] - ctg_decoding_test.mean(0)[1, :],
-                               [0], alt='greater')
+    run_contrast_single_sample(ctg_decoding_test.mean(0)[0, :] - ctg_decoding_test.mean(0)[1, :], 0, alt='greater')
 
     return ctg_decoding_test, same_ixs
