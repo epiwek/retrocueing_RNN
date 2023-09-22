@@ -16,7 +16,7 @@ from src.helpers import check_path
 
 ## TASK AND MODEL PARAMETERS ##
 PARAMS = {'n_stim': 16, 'kappa_val': 5.0, 'add_fixation': False, 'n_colCh': 17, 'n_rec': 200, 'n_out': 17,
-          'experiment_number': 3, 'n_delays': 2, 'experiment': 'Buschman_var_delays', 'target_type': 'angle_val'}
+          'experiment_number': 3, 'n_delays': 2, 'experiment': 'Buschman_var_delays'}
 PARAMS['expt_key'] = f"expt_{PARAMS['experiment_number']}"
 
 # PARAMS['target_type'] = 'class_label' # or 'Gaussian'
@@ -128,32 +128,23 @@ else:
 
 
 
-## TRAINING PARAMETERS ##
+#%% TRAINING PARAMETERS ##
 
 PARAMS['n_models'] = 30
-
 PARAMS['n_epochs'] = 1000
 PARAMS['learning_rate'] = 10**(-4)
 PARAMS['init_scale'] = 1
 # 'init_scale' - factor by which the weight init should be scaled - needed in 
 # order to be able to train longer sequences without hidden noise
 
-PARAMS['loss_fn'] = 'MSE_custom' #'CEL' # or 'MSE'
-PARAMS['l2_activity'] = False # add an L2 loss on the hidden activity
-PARAMS['Br'] = 5 * 10**(-4) # add an L2 loss on the hidden activity
-
-
-PARAMS['optim'] = 'RMSprop' #'Adam' #'RMSprop' #'SGDm'
 PARAMS['criterion_type'] = 'loss_der' 
 PARAMS['MSE_criterion'] = 0.0005
 PARAMS['conv_criterion'] = {}
 PARAMS['conv_criterion']['window'] = 15
-PARAMS['conv_criterion']['thr_loss'] = 0.0036 # last mini-pleateau
+PARAMS['conv_criterion']['thr_loss'] = 0.0036  # last mini-pleateau
 PARAMS['conv_criterion']['thr_slope'] = -2e-05
 
 PARAMS['n_jobs'] = 10
-
-PARAMS['from_scratch'] = True  # train from scratch
 
 PARAMS['n_trial_instances'] = 1
 PARAMS['n_trial_instances_test'] = 100
@@ -169,7 +160,7 @@ if PARAMS['var_delays']:
 # make a base training dataset - no noise, trials ordered by the cued colour
 TRAINING_DATA = make_stimuli_vonMises(PARAMS,epoch='test')
 
-## binning params for PCA analysis
+#%% binning params for PCA analysis
 PARAMS['n_inp'] = TRAINING_DATA['inputs'].shape[-1]
 PARAMS['B'] = 4  # number of colour bins
 PARAMS['L'] = 2  # number of cue locations
