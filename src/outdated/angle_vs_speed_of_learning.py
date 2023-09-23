@@ -239,7 +239,7 @@ plt.tight_layout()
 
 
 #%% do the same but with the AI
-from get_subspace_alignment_index import *
+from subspace_alignment_index import *
 
 load_path = constants.PARAMS['FULL_PATH'] +'pca_data/valid_trials/'
 check_intrinsic_dim(constants,load_path+'partial_training/untrained/')

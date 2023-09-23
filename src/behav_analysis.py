@@ -3,6 +3,8 @@
 """
 Created on Fri Feb  5 18:51:06 2021
 
+This file contains functions implementing the analysis of model behaviour (i.e., choices).
+
 @author: emilia
 """
 
@@ -13,21 +15,20 @@ import pickle
 import pycircstat
 import pandas as pd
 from scipy.stats import vonmises
-import matplotlib.pyplot as plt
 import src.retrocue_model as retnet
 from src.stats import get_sem
 from src.custom_plot import plot_all_error_data, plot_mixture_model_params_validity
 import src.helpers as helpers
-#%% define functions
+
+
+# %% define functions
 
 
 def angle_to_vec(angles):
     """
     Helper function to convert an array of angles into their unit-circle vector representations.
     
-    :param angles: Input array in radians.
-    :type angles : torch.Tensor
-    
+    :param torch.Tensor angles: Input array in radians.
     :return angles_vectors : torch.Tensor, first dimension corresponds to the x- and y-coordinates of the angles.
     """
     if type(angles) is not torch.Tensor:
@@ -35,7 +36,7 @@ def angle_to_vec(angles):
         angles = torch.tensor(angles)
 
     # check that ang_errors contains values in radians
-    if np.abs(angles).max() > 2*np.pi:
+    if np.abs(angles).max() > 2 * np.pi:
         warnings.warn('Large angular values detected. Check that the input array contains angular errors in radians, '
                       'if so - wrap the values to the [-pi, pi] interval. Converting the values to radians.', Warning)
         angles = np.radians(angles)
@@ -48,9 +49,7 @@ def wrap_angle(angle):
     """
     Wraps angle(s) to be within [-pi, pi).
 
-    :param angle: Input angle(s) in radians
-    :type  angle : np.ndarray, torch.Tensor
-
+    :param np.ndarray or torch.Tensor angle: Input angle(s) in radians
     :return angle_wrapped : np.ndarray, torch.Tensor
     """
     angle_wrapped = (angle + np.pi) % (2 * np.pi) - np.pi
@@ -65,11 +64,8 @@ def get_angular_errors(choices, probed_colours):
     response (choice) and the ground truth probed colour value, in radians, wrapped
     to lie within the [-pi, pi] interval.
     
-    :param choices : (n_trials, ) Trial-wise model choices.
-    :type choices: torch.Tensor
-    :param probed_colours : (n_trials, ) Trial-wise probed colours.
-    :type probed_colours: torch.Tensor
-
+    :param torch.Tensor choices : (n_trials, ) Trial-wise model choices.
+    :param torch.Tensor probed_colours : (n_trials, ) Trial-wise probed colours.
     :return ang_errors : torch.Tensor (n output channels, n trials per probed colour)
         Angular error values [radians], sorted into columns according to the probed colour.
         
@@ -90,23 +86,22 @@ def get_angular_errors(choices, probed_colours):
         colour_ix[i] = np.where(probed_colours == c)[0]
 
     # Calculate angular errors (difference between model choices and target responses)
-    ang_errors = torch.empty((len(colours), n_trials//len(colours)))
+    ang_errors = torch.empty((len(colours), n_trials // len(colours)))
     # error for each colour, irrespective of its location
     for c in range(n_colours):
-        ang_errors[c, :] = choices[colour_ix[c]]-probed_colours[colour_ix[c]]
+        ang_errors[c, :] = choices[colour_ix[c]] - probed_colours[colour_ix[c]]
 
     # Wrap (angular) errors to [-pi, pi)
     ang_errors = wrap_angle(ang_errors)
-    
+
     return ang_errors
 
 
 def get_abs_err_mean_sd(ang_errors):
     """
     Calculate the mean and standard deviation of absolute errors, in degrees.
-    :param ang_errors: data array with angular error values in radians. If multidimensional, will be flattened.
-    :type ang_errors: torch.Tensor
-
+    :param torch.Tensor ang_errors: data array with angular error values in radians. If multidimensional, will be
+        flattened.
     :return: (mean, std) of absolute angular errors
     """
     if type(ang_errors) is not torch.Tensor:
@@ -130,9 +125,8 @@ def get_circ_mean_kappa(ang_errors):
     """
        Calculate the circular mean and kappa of angles, in degrees.
 
-       :param ang_errors: data array with angular error values in radians. If multidimensional, will be flattened.
-       :type ang_errors: torch.Tensor
-
+       :param torch.Tensor ang_errors: data array with angular error values in radians. If multidimensional, will be
+            flattened.
        :return: (circular mean, kappa) of angular errors in degrees
 
        """
@@ -156,9 +150,8 @@ def fit_von_mises_distr(ang_errors):
     """
     Fit a vonMises distribution to the angular error data.
 
-    :param ang_errors: data array with angular error values in radians. If multidimensional, will be flattened.
-    :type ang_errors: torch.Tensor
-
+    :param torch.Tensor ang_errors: data array with angular error values in radians. If multidimensional, will be
+        flattened.
     :return: fitted params: dictionary with the fitted 'kappa', 'mu' and 'scale' parameters, values expressed in radians
 
     .. note::  When fitting the distribution, need to fix the 'scale' parameter to 1.0, otherwise it fits some kind
@@ -184,13 +177,11 @@ def fit_von_mises_distr(ang_errors):
 
 
 def bin_errors(ang_errors):
-
     """ Bin angular error values on the [-180, 180] degree interval into 40-degree wide bins and calculate the error
     density for each bin.
 
-    :param ang_errors: Input tensor with angular error values in radians. If multidimensional, will be flattened.
-    :type ang_errors: torch.Tensor
-
+    :param torch.Tensor ang_errors: Input tensor with angular error values in radians. If multidimensional, will be
+        flattened.
     :returns:
         binned_errors : (n_bins, ) Error density values for each bin
         bin_centres : (n_bins, ) Bin centres in radians
@@ -216,11 +207,8 @@ def get_all_errors(constants, load_path):
     """
     Loop through all models to get the trial-wise and binned angular error values.
 
-    :param constants: Module containing the experimental constants.
-    :type constants: module
-    :param load_path: path to the data folder when model choices / responses are saved.
-    :type load_path: str
-
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param str load_path: path to the data folder when model choices / responses are saved.
     :return: error_results: dictionary with the following keys:
         'ang_errors' : torch.Tensor (n_models, n_colours, n_trials_per_colour) - angular error values, sorted by model,
             probed colour and trial
@@ -242,7 +230,8 @@ def get_all_errors(constants, load_path):
 
         # calculate angular errors
         ang_errors.append([])
-        ang_errors[model_number] = get_angular_errors(model_outputs['choices'], model_outputs['labels']['probed_colour'])
+        ang_errors[model_number] = get_angular_errors(model_outputs['choices'],
+                                                      model_outputs['labels']['probed_colour'])
 
         # bin errors
         binned_errors.append([])
@@ -252,16 +241,15 @@ def get_all_errors(constants, load_path):
         mean_abs_err.append([]), sd_abs_err.append([])
         mean_abs_err[model_number], sd_abs_err[model_number] = get_abs_err_mean_sd(ang_errors[model_number])
 
-
     ang_errors = torch.stack(ang_errors)
     binned_errors = np.stack(binned_errors)
 
     error_results = {'ang_errors': ang_errors,
-               'binned_errors': binned_errors,
-               'bin_centres': bin_centres,
-               'bin_max': b,
-               'probed_colours': model_outputs['labels']['probed_colour'],
-               'unprobed_colours': model_outputs['labels']['unprobed_colour']}
+                     'binned_errors': binned_errors,
+                     'bin_centres': bin_centres,
+                     'bin_max': b,
+                     'probed_colours': model_outputs['labels']['probed_colour'],
+                     'unprobed_colours': model_outputs['labels']['unprobed_colour']}
 
     return error_results
 
@@ -270,13 +258,12 @@ def get_all_error_stats(error_results):
     """ Calculate some statistics on the errors pooled from all models: (1) mean and sd of absolute mean error,
     (2) mean and sem of binned errors, (3) vonmises distribution parameters.
 
-    :param: error_results: dictionary containing the angular error analysis results. Should contain the following keys:
-        'ang_errors': torch.Tensor (n_models, n_colours, n_trials_per_colour) - angular error values, sorted by model,
-            probed colour and trial
-        'binned_errors': torch.Tensor (n_models, n_bins) - density of errors for each angular error bin, sorted by
-            models and bins
-    :type error_results: dict
-
+    :param dict error_results: dictionary containing the angular error analysis results. Should contain the following
+        keys:
+            'ang_errors': torch.Tensor (n_models, n_colours, n_trials_per_colour) - angular error values, sorted by
+                model, probed colour and trial
+            'binned_errors': torch.Tensor (n_models, n_bins) - density of errors for each angular error bin, sorted by
+                models and bins
     :return: error_stats: dictionary containing the statistics calculated on angular error data from all models.
         Contains the following keys:
             'mean_abs_err': scalar mean of absolute errors, pooled from all models
@@ -286,7 +273,6 @@ def get_all_error_stats(error_results):
             'fitted_params': dictionary with the fitted 'kappa', 'mu' and 'scale' parameters,
                                 values expressed in radians
     """
-
 
     # get the mean and sem of binned errors across models
     error_stats = {}
@@ -303,18 +289,16 @@ def get_all_error_stats(error_results):
 
     return error_stats
 
-#%%
+
+# %% io
 
 
 def save_error_data_to_file(results, test_path):
     """
     Saves the angular error data dictionary to file. Each key is saved as a separate datafile.
 
-    :param results: A dictionary containing the results of the angular error analysis.
-    :type results: dict
-    :param test_path: file destination path
-    :type test_path: str
-
+    :param dict results: A dictionary containing the results of the angular error analysis.
+    :param str test_path: file destination path
     """
     # % save data
     for key in results.keys():
@@ -328,15 +312,12 @@ def load_mixture_model_params(constants):
     to the parameters: 'K', 'pT', 'pNT' and 'pU'. Each key contains a pandas dataframe with the fitted param values for
     valid and invalid trials (stacked on top of one another as rows).
 
-
-    :param constants: module with experimental constants. Should contain the field 'PARAMS', containing subfields
-        'cue_validity' and 'n_models'.
-    :type constants: module
-
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+        Must contain a 'PARAMS' dictionary, containing 'cue_validity' and 'n_models' keys.
     :return mixture_param_data_dict: dictionary, keys are named after the mixture model parameters ('K', 'pT', 'pNT'
         and 'pU'), each contains a pandas dataframe with 'trial_type' (valid, invalid), 'condition' (cue validity: 0.5,
-        0.75) and 'param' (e.g., 'K') columns. Note data from each model is saved in 2 separate rows (one for valid trial
-         estimates, and another for invalid trials.
+        0.75) and 'param' (e.g., 'K') columns. Note data from each model is saved in 2 separate rows (one for valid
+        trial estimates, and another for invalid trials).
     """
 
     if constants.PARAMS['cue_validity'] == 1:
@@ -395,12 +376,9 @@ def run_behav_analysis(constants, expt_test_conditions, expt_test_paths):
     5) For probabilistic conditions (where cue validity < 1) from experiment 4: load and plot the mixture model
         parameters fitted (in MATLAB) to the data from valid and invalid trials.
 
-    :param constants: Module with experimental constants.
-    :type constants: module
-    :param expt_test_conditions: Test conditions for the current experiment.
-    :type expt_test_conditions: list
-    :param expt_test_paths: Full paths to the directories containing test data for each of the test condition.
-    :type expt_test_paths: list
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param list expt_test_conditions: Test conditions for the current experiment.
+    :param list expt_test_paths: Full paths to the directories containing test data for each of the test condition.
     :return:
 
     ..note :: expt_test_conditions should be obtained by passing the expt_key into the test_conditions dictionary
@@ -409,9 +387,10 @@ def run_behav_analysis(constants, expt_test_conditions, expt_test_paths):
         (i.e., generate_test_conditions), accessed by passing the expt_key key.
 
     :Example:
-        To run the analysis for Experiment 1, we would first run the generate_test_conditions from src.generate_data_vonMises
-        to obtain the test_conditions and folder_names dictionaries. Then, to obtain the list of expt_test_conditions, we
-        would pass the expt_key 'expt_1' (available under constants.PARAMS['expt_key'] to test_conditions:
+        To run the analysis for Experiment 1, we would first run the generate_test_conditions from
+        src.generate_data_vonMises to obtain the test_conditions and folder_names dictionaries. Then, to obtain the
+        list of expt_test_conditions, we would pass the expt_key 'expt_1' (available under constants.PARAMS['expt_key']
+        to test_conditions:
             expt_test_conditions = test_conditions['expt_1']
         To obtain the list of expt_test_paths, we would run the following:
             test_paths = [constants.PARAMS['DATA_PATH'] + f for f in folder_names[constants.PARAMS['expt_key']]]
