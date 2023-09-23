@@ -200,5 +200,5 @@ PARAMS['FIG_PATH'] = f"{PARAMS['FULL_PATH']}figs/"
 check_path(PARAMS['FIG_PATH'])  # create the figure folder if it doesn't exist
 
 PARAMS['MATLAB_PATH'] = '/Users/emilia/OneDrive - Nexus365/MATLAB/rnn_retrocue_data/'
-PARAMS['RAW_DATA_PATH'] = f"{PARAMS['FULL_PATH']}pca_data/"
-PARAMS['RESULTS_PATH'] = f"{PARAMS['FULL_PATH']}pca_data/"
+PARAMS['RAW_DATA_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"
+PARAMS['RESULTS_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"
