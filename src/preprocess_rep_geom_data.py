@@ -59,19 +59,16 @@ def split_train_test(eval_data, train_ixs, test_ixs, cv_fold):
     """
     Splits the data into train and test subsets using the training and test trial indices from a given cv fold.
 
-    :param eval_data: dictionary containing the to-be-split data of a (n_trials, n_timepoints, n_neurons) shape, under
-        the 'data' key
-    :type eval_data: dict
-    :param train_ixs: list of training trial indices for each cross-validation fold, (n_cv_folds)
-    :type train_ixs: list
-    :param test_ixs: analogous list of test trial indices
-    :type test_ixs: list
-    :param cv_fold: index of the cv fold
-    :type cv_fold: int
+    :param dict eval_data: dictionary containing the to-be-split data of a (n_trials, n_timepoints, n_neurons) shape,
+        under the 'data' key
+    :param list train_ixs: list of training trial indices for each cross-validation fold, (n_cv_folds)
+    :param list test_ixs: analogous list of test trial indices
+    :param int cv_fold: index of the cv fold
     :return: data_train, data_test arrays (n_trials, n, m)
     """
     data_train = eval_data['data'][train_ixs[cv_fold], :, :]
     data_test = eval_data['data'][test_ixs[cv_fold], :, :]
+
     return data_train, data_test
 
 
@@ -121,7 +118,37 @@ def make_loc_arrays(delay_data, n_bins):
     return loc1_array, loc2_array
 
 
-def preprocess_model_data_rot_unrot(constants, eval_data, train_ixs, test_ixs, n_bins):
+def split_into_location_data(constants, labels, delay_data):
+    """
+    Split the data and labels arrays into subsets, according to the location of the cued item.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param labels: Labels array, shape (n_trials, )
+    :param np.ndarray delay_data: Data array containing the subset of the data corresponding to the required trial
+        timepoint(s), shape: (n_trials, len(delay_ix), n_neurons) or (n_trials, n_neurons)
+    :return: labels_split, data_split: arrays with the data split into location subsets, shape:
+        (n_locations, n_trials_per_location) and (n_locations, n_trials_per_location, n_neurons)
+    """
+    # split the labels according to the cued location
+    n_trials = labels.shape[0]
+    if constants.PARAMS['L'] is not 2:
+        raise ValueError('The split_ix below will not work for n_locations other than 2.')
+
+    split_ix = n_trials // constants.PARAMS['L']
+    ixs = [np.arange(split_ix), np.arange(split_ix, n_trials)]
+
+    # Note - this could be rewritten by reshaping the original arrays
+    labels_split, data_split = [], []
+    for ix in ixs:
+        labels_split.append(labels[ix])
+        data_split.append(delay_data[ix, :])
+
+    labels_split = np.stack(labels_split)
+    data_split = np.stack(data_split)
+    return labels_split, data_split
+
+
+def preprocess_model_data_rot_unrot(constants, eval_data, train_ixs, test_ixs, n_bins, bin_data=True):
     """
     Runs the full preprocessing pipeline.
 
@@ -129,18 +156,14 @@ def preprocess_model_data_rot_unrot(constants, eval_data, train_ixs, test_ixs, n
     and bins the data into n_bins colour bins. Creates a location-specific array (e.g., an array containing 'cued' and
     'uncued' colour representations from the 'cued_up_uncued_down' trials.
 
-    :param constants: Experimental constants
-    :type constants: module
-    :param eval_data: Dictionary containing the model evaluation data. Keys include: 'dimensions', 'data', and 'labels'.
-        Data entry has the following dimensionality: (n_trials, n_timepoints, n_neurons). For more details, refer to the
-        eval_model function in retrocue_model.py
-    :type eval_data: dict
-    :param train_ixs: list of training trial indices for each cross-validation fold, (n_cv_folds)
-    :type train_ixs: list
-    :param test_ixs: analogous list of test trial indices
-    :type test_ixs: list
-    :param n_bins: number of colour bins to bin data into
-    :type n_bins: int
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param dict eval_data: Dictionary containing the model evaluation data. Keys include: 'dimensions', 'data', and
+    'labels'. The data entry has the following dimensionality: (n_trials, n_timepoints, n_neurons). For more details,
+        refer to the eval_model function in retrocue_model.py
+    :param list train_ixs: list of training trial indices for each cross-validation fold, (n_cv_folds)
+    :param list test_ixs: analogous list of test trial indices
+    :param int n_bins: number of colour bins to bin data into
+    :param bool bin_data: Optional. If True, bins the data (and labels) into n_bins colour bins. Default is True.
     :return: preprocessed_data: list of data dictionaries, each item corresponds to a cross-validation fold and contains
         'train' and 'test' key, each in turn containing location-specific data under 'loc1' and 'loc1' 2.
     """
@@ -153,9 +176,10 @@ def preprocess_model_data_rot_unrot(constants, eval_data, train_ixs, test_ixs, n
         # split into train and test
         data_train, data_test = split_train_test(eval_data, train_ixs, test_ixs, cv)
 
-        # bin into colour bins
-        data_train = helpers.bin_data(constants.PARAMS, data_train)
-        data_test = helpers.bin_data(constants.PARAMS, data_test)
+        if bin_data:
+            # bin into colour bins
+            data_train = helpers.bin_data(constants.PARAMS, data_train)
+            data_test = helpers.bin_data(constants.PARAMS, data_test)
 
         # extract the delay timepoints
         delay_data_train = extract_delays(data_train, delay_ixs)
@@ -306,8 +330,10 @@ def preprocess_CDI_data(constants, all_data_valid, all_data_invalid=None):
 
         if constants.PARAMS['cue_validity'] < 1:
             # make analogous arrays for the invalid trials
-            probed_up_invalid = extract_delays(all_data_invalid[model]['cued_up_uncued_down']['data'], delay_timepoints)
-            probed_down_invalid = extract_delays(all_data_invalid[model]['cued_down_uncued_up']['data'], delay_timepoints)
+            probed_up_invalid = extract_delays(all_data_invalid[model]['cued_up_uncued_down']['data'],
+                                               delay_timepoints)
+            probed_down_invalid = extract_delays(all_data_invalid[model]['cued_down_uncued_up']['data'],
+                                                 delay_timepoints)
 
             probed_up_invalid = probed_up_invalid.swapaxes(1, 0).reshape(-1, 200)
             probed_down_invalid = probed_down_invalid.swapaxes(1, 0).reshape(-1, 200)
@@ -351,10 +377,20 @@ def get_unrotated_rotated_data(constants, get_test_train_split=False):
         trial_ixs = {'train': {}, 'test': {}}
         for model in range(constants.PARAMS['n_models']):
             trial_ixs['train'][model], trial_ixs['test'][model] = get_cv_trial_ixs(constants, model, cv=2)
+
+        # save for other analyses
+        with open(f"{load_path}/trial_ixs_for_unrotrot_analysis.pckl", 'wb') as f:
+            pickle.dump(trial_ixs, f)
+
     else:
         # load test/train ixs from file
-        with open(f"{load_path}/trial_ixs_for_unrotrot_analysis.pckl", 'rb') as f:
-            trial_ixs = pickle.load(f)
+        try:
+            with open(f"{load_path}/trial_ixs_for_unrotrot_analysis.pckl", 'rb') as f:
+                trial_ixs = pickle.load(f)
+        except FileNotFoundError:
+            print(f"Train and test train indices not found. Set the get_test_train_split argument to True to draw new"
+                  f"ones and run the analysis again.")
+            return
 
     all_data = []
     for model in range(constants.PARAMS['n_models']):
