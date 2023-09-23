@@ -4,10 +4,11 @@ from src.subspace import Geometry
 import pickle
 import importlib
 import matplotlib.pyplot as plt
-import src.custom_plot as cplot
+import src.custom_plot as plotter
 import src.plane_angles_analysis as angles
 import src.vec_operations as vops
 import src.preprocess_rep_geom_data as ppc
+import src.stats as stats
 
 
 # %% define looper functions that will loop across models, delay intervals and experiments
@@ -23,19 +24,15 @@ def model_geometry_looper(constants, all_data, geometry_name, delay_name=None):
         - all_PVEs: list of arrays containing the percent variance explained values for the first 3 PCs of the fitted
             subspaces.
 
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param dict all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
         geometries. See the output of the 'get_all_binned_data' function for more details.
-    :type all_data: dict
-    :param geometry_name: Desired geometry. Choose from: 'cued', 'uncued', 'cued_up_uncued_down' and
+    :param str geometry_name: Desired geometry. Choose from: 'cued', 'uncued', 'cued_up_uncued_down' and
         'cued_down_uncued_up'
-    :type geometry_name: str
-    :param delay_name: Desired delay interval. Choose from: 'delay1', 'delay2' and 'delay3' (only for Experiment 4).
-    :type delay_name: str
+    :param str delay_name: Desired delay interval. Choose from: 'delay1', 'delay2' and 'delay3' (only for Experiment 4).
     :return: all_subspaces, all_psi, all_theta, all_PVEs
 
-    .. note:: This function mirrors the model_looper function from subsoace_alignment_index. Both could probably be
+    .. note:: This function mirrors the model_looper function from subspace_alignment_index. Both could probably be
     rewritten as decorators.
     """
     assert geometry_name in ['cued', 'uncued', 'cued_up_uncued_down', 'cued_down_uncued_up'], \
@@ -69,14 +66,11 @@ def delay_looper_geometry(constants, all_data, geometry_name):
     (n_models, n_delays) and (n_models, n_delays, n_PCs), respectively. The subspaces are saved into a dictionary with
     keys corresponding to the delay names (e.g., 'delay1')
 
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param dict all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
         geometries. See the output of the 'get_all_binned_data' function for more details.
-    :type all_data: dict
-    :param geometry_name: Desired geometry. Choose from: 'cued', 'uncued', 'cued_up_uncued_down' and
+    :param str geometry_name: Desired geometry. Choose from: 'cued', 'uncued', 'cued_up_uncued_down' and
         'cued_down_uncued_up'
-    :type geometry_name: str
     :return: cued_subspaces, psi, theta, PVEs
 
     .. note:: This function mirrors the delay_looper function from subspace_alignment_index. Both could probably be
@@ -107,12 +101,11 @@ def experiment_2_looper(constants):
     calculate the Cued geometry in a single loop. Returns the theta angle estimates and PC variance explained values for
     the fitted 3D subspaces.
 
-    :param constants: Experimental constants module.
-    :type constants: module
-    :return: all_theta (n_models, n_delays, n_delay2_lengths), all_PVES (n_models, n_delays, n_PCs, n_delay2_lengths)
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :return: all_theta (n_models, n_delays, n_delay2_lengths), all_PVEs (n_models, n_delays, n_PCs, n_delay2_lengths)
     """
     assert constants.PARAMS['experiment_number'] == 2, \
-        'This function should only be used with Experiment 2 (retrocue timing)'
+        'This function should only be used for Experiment 2 (retrocue timing)'
     delay2_max_length = \
         (constants.PARAMS['trial_timings']['delay1_dur'] + constants.PARAMS['trial_timings']['delay2_dur']) // 2
 
@@ -127,8 +120,8 @@ def experiment_2_looper(constants):
         try:
             _, all_data = ppc.get_all_binned_data(c, trial_type='valid')
         except FileNotFoundError:
-            print(f"Data from post-cue delay length {delay2_length} cycles not found. Make sure models from all variants"
-                  f" of Experiment 2 have been evaluated and data saved.")
+            print(f"Data from post-cue delay length {delay2_length} cycles not found. Make sure models from all "
+                  f"variants of Experiment 2 have been evaluated and data saved.")
             return
 
         # get the cued geometry
@@ -136,7 +129,7 @@ def experiment_2_looper(constants):
         all_theta.append(theta)
         all_PVEs.append(PVEs)
 
-    all_theta = np.stack(all_theta).transpose([1, 2, 0]) # model x delay x delay2 length
+    all_theta = np.stack(all_theta).transpose([1, 2, 0])  # model x delay x delay2 length
     all_PVEs = np.stack(all_PVEs).transpose([1, 2, 3, 0])  # model x delay x PC number x delay2 length
 
     return delay2_max_length, all_theta, all_PVEs
@@ -150,14 +143,12 @@ def model_CDI_looper(constants, cued_up_coords, cued_down_coords):
     3) average across the cued / probed locations, and other conditions depending on the experiment
     4) create CDI_for_plots and CDI_for_stats dataframes
 
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param cued_up_coords: dictionary with 3D coordinates fitted to the data from cued_up_uncued_down trials for each
-        model. Keys correspond to the model number, and each contains a (n_conditions, 3) array.
-    :type cued_up_coords: dict
-    :param cued_down_coords: analogous dictionary with 3D coordinates fitted to the data from cued_down_uncued_up trials
-    :type cued_down_coords: dict
-    :return: CDI_for_plots, CDI_for_stats
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param dict cued_up_coords: dictionary with 3D coordinates fitted to the data from cued_up_uncued_down trials for
+        each model. Keys correspond to the model number, and each contains a (n_conditions, 3) array.
+    :param dict cued_down_coords: analogous dictionary with 3D coordinates fitted to the data from cued_down_uncued_up
+        trials
+    :return: CDI_for_plots, CDI_for_stats: pandas DataFrames
     """
 
     CDI_for_plots = []
@@ -228,13 +219,11 @@ def average_CDI(constants, CDI):
 
     This is a single-model level funtion.
 
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param CDI: Array with all CDI values of (n_cued_locations, n_delays, n_plane_statuses, n_validity_types). First
-        dimension should contain data from different trials (defined by the location of the cued/probed and
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param np.ndarray CDI: Array with all CDI values of (n_cued_locations, n_delays, n_plane_statuses,n_validity_types).
+        First dimension should contain data from different trials (defined by the location of the cued/probed and
         uncued/unprobed items, e.g. cued_up_uncued_down). Third dimension should contain data from planes with different
         status (cued / uncued or probed/unprobed).
-    :type CDI: np.ndarray
     :return: CDI_for_plots, CDI_for_stats
 
     """
@@ -314,15 +303,29 @@ def average_CDI(constants, CDI):
     return CDI_for_plots, CDI_for_stats
 
 
+def test_CDI_contrasts(constants, CDI):
+    if constants.PARAMS['experiment_number'] is not 1:
+        raise ValueError('Contrasts only implemented for Experiment 1, use JASP instead.')
+    # first contrast: cued >> uncued
+    # second contrast: cued >> pre-cue
+    # third contrast (uncued == pre-cue) done in JASP
+
+    contrast_names = ['Contrast 1: cued > uncued', 'Contrast 2: cued > pre-cue']
+    contrast_items = [['post_cued', 'post_uncued'], ['post_cued', 'pre-cue']]
+    for c, contrast_name in enumerate(contrast_names):
+        print(contrast_names[c])
+        item1, item2 = contrast_items[c]
+        stats.run_contrast_paired_samples(CDI[item1], CDI[item2], alt='greater')
+
+    return
+
+
 def save_CDI_to_file(constants, CDI_for_plots, CDI_for_stats):
     """
     Save CDI data frames to file.
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param CDI_for_plots: CDI data for plotting
-    :type CDI_for_plots: array-like
-    :param CDI_for_stats: CDI data for statistical analysis
-    :type CDI_for_stats: array-like
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param pd.DataFrame CDI_for_plots: CDI data for plotting
+    :param pd.DataFrame CDI_for_stats: CDI data for statistical analysis
     """
     save_path = constants.PARAMS['FULL_PATH'] + 'pca_data/'
 
@@ -339,11 +342,9 @@ def get_unrotated_rotated_label(constants, preprocessed_data):
     Find the 'unrotated' and 'rotated' Cued plane labels using the training data and create a dictionary mapping them
     to the two cue locations.
 
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param preprocessed_data: binned location-wise data from all models, split into a training and test set. For more
-        information, see the get_unrotated_rotated_data function from preprocess_rep_geom_data.py
-    :type preprocessed_data: np.ndarray
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param np.ndarray preprocessed_data: binned location-wise data from all models, split into a training and test set.
+        For more information, see the get_unrotated_rotated_data function from preprocess_rep_geom_data.py
     :return: labels_dict
     """
     # fit the subspace to the training data
@@ -363,6 +364,8 @@ def get_unrotated_rotated_label(constants, preprocessed_data):
     return labels_dict
 
 #%% runner functions
+
+
 def run_CDI_analysis(constants):
     """
     Run the full CDI analysis pipeline. The steps are:
@@ -374,8 +377,7 @@ def run_CDI_analysis(constants):
     4) plot
     5) save data to file
 
-    :param constants: Experimental constants module.
-    :type constants: module
+    :param module constants: A Python module containing constants and configuration data for the simulation.
     """
 
     # get the single-trial location arrays
@@ -390,11 +392,16 @@ def run_CDI_analysis(constants):
     # calculate the CDI for all models (area of the data rectangle)
     CDI_for_plots, CDI_for_stats = model_CDI_looper(constants, cued_up_coords, cued_down_coords)
 
-    # plot
-    cplot.plot_CDI(constants, CDI_for_plots, log_transform=True)
+    # if constants.PARAMS['experiment_number'] == 1:
+        # run contrasts - done in JASP
+        # test_CDI_contrasts(constants, CDI_for_stats)
 
-    # plt.savefig(constants.PARAMS['FIG_PATH'] + 'CDI.png')
-    # plt.savefig(constants.PARAMS['FIG_PATH'] + 'CDI.svg')
+    # plot
+    plotter.plot_CDI(constants, CDI_for_plots, log_transform=True)
+
+    if constants.PLOT_PARAMS['save_plots']:
+        plt.savefig(constants.PARAMS['FIG_PATH'] + 'CDI.png')
+        plt.savefig(constants.PARAMS['FIG_PATH'] + 'CDI.svg')
 
     # save data to file
     # save_CDI_to_file(constants, CDI_for_plots, CDI_for_stats)
@@ -410,11 +417,9 @@ def run_cued_geom_analysis(constants, all_data):
     3) Plot the percentage variance explained (PVE) by the 3-dimensional subspaces for all models.
     4) Run the theta and psi angles analysis: plot, print descriptive and inferential statistics
 
-    :param constants: experimental constants module.
-    :type constants: module
-    :param all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param dict all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
         geometries. See the output of the 'get_all_binned_data' function for more details.
-    :type all_data: dict
     """
     # get the Cued item geometry for all trained networks and delays
     cued_subspaces, psi, theta, PVEs = delay_looper_geometry(constants, all_data, 'cued')
@@ -422,14 +427,14 @@ def run_cued_geom_analysis(constants, all_data):
     if constants.PARAMS['experiment_number'] == 1:
         # plot 3D geometry for example models
         models = [8, 4]
-        fig_list = cplot.plot_full_geometry(constants, models, cued_subspaces)
+        fig_list = plotter.plot_full_geometry(constants, models, cued_subspaces)
         if constants.PLOT_PARAMS['save_plots']:
             for fig, model in zip(fig_list, models):
                 fig.savefig(f"{constants.PARAMS['FIG_PATH']}cued_geometry_example_model_{model}.svg")
         pass
 
     # plot PVEs
-    cplot.plot_PVEs_3D(constants, PVEs, fig_name='PVEs_3D_cued_geometry')
+    plotter.plot_PVEs_3D(constants, PVEs, fig_name='PVEs_3D_cued_geometry')
 
     if constants.PLOT_PARAMS['save_plots']:
         plt.savefig(f"{constants.PARAMS['FIG_PATH']}'PVEs_3D_cued_geometry.svg")
@@ -445,18 +450,21 @@ def run_cued_geometry_experiment_2(constants):
     Run the Cued geometry analysis for Experiment 2 (retrocue timing). Plots the pre- and post-cue angles against
     the post-cue delay length.
 
-    :param constants: experimental constants module.
-    :type constants: module
+    :param module constants: A Python module containing constants and configuration data for the simulation.
     """
+    assert constants.PARAMS['experiment_number'] == 2, \
+        'This function should only be used for Experiment 2 (retrocue timing)'
+
     # calculate the geometry for all variants of the experiment
     delay2_max_length, all_theta, all_PVEs = experiment_2_looper(constants)
 
     # plot the angle comparison
-    cplot.plot_angles_experiment_2(constants, delay2_max_length, all_theta)
+    plotter.plot_geometry_estimates_experiment_2(constants, delay2_max_length, all_theta)
     # save plot
+    print('Change the path below to that shared by all variants of Expt 2')
     if constants.PLOT_PARAMS['save_plots']:
-        plt.savefig(f"{constants.PARAMS['FIG_PATH']}'compare_cued_angles.svg")
-        plt.savefig(f"{constants.PARAMS['FIG_PATH']}'compare_cued_angles.png")
+        plt.savefig(f"{constants.PARAMS['EXPT2_PATH']}'compare_cued_angles.svg")
+        plt.savefig(f"{constants.PARAMS['EXPT2_PATH']}'compare_cued_angles.png")
 
     return
 
@@ -475,8 +483,7 @@ def run_unrotated_rotated_geometry(constants):
      3.2) run inferential stat tests
      3.3) plot
 
-    :param constants: experimental constants module.
-    :type constants: module
+    :param module constants: A Python module containing constants and configuration data for the simulation.
 
     .. note:: This analysis is not implemented for Experiments 2 and 4, and running it for them will produce an error.
 
@@ -527,11 +534,9 @@ def run_uncued_geom_analysis(constants, all_data):
     3) Plot the percentage variance explained (PVE) by the 3-dimensional subspaces for all models.
     4) Run the theta and psi angles analysis: plot, print descriptive and inferential statistics
 
-    :param constants: experimental constants module.
-    :type constants: module
-    :param all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param dict all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
         geometries. See the output of the 'get_all_binned_data' function for more details.
-    :type all_data: dict
 
     .. note:: This analysis is not implemented for Experiments 2 and 4, and running it for them will produce an error.
 
@@ -545,7 +550,7 @@ def run_uncued_geom_analysis(constants, all_data):
     if constants.PARAMS['experiment_number'] == 1:
         # plot 3D geometry for example models
         models = [19, 27]
-        cplot.plot_full_geometry(constants, models, subspaces)
+        plotter.plot_full_geometry(constants, models, subspaces)
 
         # plot PVEs
         # cplot.plot_PVEs_3D(constants, PVEs, fig_name='PVEs_3D_uncued_geometry')
@@ -565,11 +570,9 @@ def run_cued_uncued_geom_analysis(constants, all_data):
     3) Plot the percentage variance explained (PVE) by the 3-dimensional subspaces for all models.
     4) Run the theta and psi angles analysis: plot, print descriptive and inferential statistics
 
-    :param constants: experimental constants module.
-    :type constants: module
-    :param all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param dict all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
         geometries. See the output of the 'get_all_binned_data' function for more details.
-    :type all_data: dict
 
     .. note:: This analysis is not implemented for Experiments 2 and 4, and running it for them will produce an error.
 
@@ -588,7 +591,7 @@ def run_cued_uncued_geom_analysis(constants, all_data):
     if constants.PARAMS['experiment_number'] == 1:
         # plot 3D geometry for example models - from cued up/uncued down trials
         models = [1, 7]
-        cplot.plot_full_geometry(constants, models, subspace_results[0])
+        plotter.plot_full_geometry(constants, models, subspace_results[0])
 
     # run the angles analysis only on post-cue delay data
     post_cue_ix = 1
@@ -610,8 +613,7 @@ def run_full_rep_geom_analysis(constants):
 
     See the individual geometry runners for more details about each analysis.
 
-    :param constants: experimental constants module.
-    :type constants: module
+    :param module constants: A Python module containing constants and configuration data for the simulation.
     """
 
     print('......REPRESENTATIONAL GEOMETRY ANALYSIS......')
