@@ -27,6 +27,9 @@ PARAMS['experiment_number'] = 4
 PARAMS['n_delays'] = 3
 PARAMS['experiment'] = 'validity_paradigm'
 PARAMS['expt_key'] = 'expt_4_cue_val_0.5'
+PARAMS['ai_vs_learning_speed'] = False  # variant of the experiment for running the AI vs learning speed analysis.
+# different from the base experiment configuration in terms of the training stop procedure used (stop training once
+# the loss falls below a hard threshold) and number of models trained (increased to 50)
 
 PARAMS['n_trial_types'] = (PARAMS['n_stim'] ** 2) * 2
 PARAMS['trial_timings'] = {}
@@ -192,6 +195,12 @@ PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
 PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'
 PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
+
+if PARAMS['ai_vs_learning_speed']:
+    # Variant of the experiment for running the AI vs learning speed analysis.
+    # Different from the base experiment configuration in terms of the training stop procedure used (stop training once
+    # the loss falls below a hard threshold) and number of models trained (increased to 50)
+    PARAMS['COND_PATH'] += 'ai_vs_learning_speed/'
 
 if PARAMS['experiment_number'] == 4:
     PARAMS['COND_PATH'] += f"validity_{PARAMS['cue_validity']}/5_cycles/"

@@ -25,10 +25,10 @@ PARAMS = {'n_stim':16,
 
 PARAMS['experiment_number'] = 2
 PARAMS['n_delays'] = 2
-PARAMS['experiment'] = 'Buschman paradigm'
 PARAMS['expt_key'] = 'expt_2_delay2_1cycles'
-
-PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'
+PARAMS['ai_vs_learning_speed'] = False  # variant of the experiment for running the AI vs learning speed analysis.
+# different from the base experiment configuration in terms of the training stop procedure used (stop training once
+# the loss falls below a hard threshold) and an increased number of models trained
 
 PARAMS['n_trial_types'] = (PARAMS['n_stim']**2)*2
 PARAMS['trial_timings'] = {}
@@ -206,8 +206,11 @@ PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
 PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'
 PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
-# common path for all experiment 2 variants - for saving plots and data structures
-PARAMS['EXPT2_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
+if PARAMS['ai_vs_learning_speed']:
+    # Variant of the experiment for running the AI vs learning speed analysis.
+    # Different from the base experiment configuration in terms of the training stop procedure used (stop training once
+    # the loss falls below a hard threshold) and number of models trained (increased to 50)
+    PARAMS['COND_PATH'] += 'ai_vs_learning_speed/'
 
 if PARAMS['experiment_number'] == 4:
     PARAMS['COND_PATH'] += f"validity_{PARAMS['cue_validity']}/5_cycles/"
@@ -216,6 +219,9 @@ elif PARAMS['experiment_number'] == 2:
 
 print(PARAMS['COND_PATH'])  # print the condition path to the console
 check_path(PARAMS['COND_PATH'])
+
+# common path for all experiment 2 variants - for saving plots and data structures
+PARAMS['EXPT2_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
 
 # full parameterisation
 PARAMS['FULL_PATH'] = f"{PARAMS['COND_PATH']}sigma{PARAMS['sigma']}/kappa{PARAMS['kappa_val']}/nrec{PARAMS['n_rec']}/" \

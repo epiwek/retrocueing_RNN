@@ -26,8 +26,9 @@ PARAMS = {'n_stim':16,
 PARAMS['experiment_number'] = 2
 PARAMS['expt_key'] = 'expt_2_delay2_0cycles'
 PARAMS['n_delays'] = 2
-PARAMS['experiment'] = 'Buschman paradigm'
-PARAMS['target_type'] = 'angle_val' #'class_label' # or 'Gaussian'
+PARAMS['ai_vs_learning_speed'] = False  # variant of the experiment for running the AI vs learning speed analysis.
+# different from the base experiment configuration in terms of the training stop procedure used (stop training once
+# the loss falls below a hard threshold) and an increased number of models trained
 
 PARAMS['n_trial_types'] = (PARAMS['n_stim']**2)*2
 PARAMS['trial_timings'] = {}

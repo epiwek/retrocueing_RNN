@@ -13,7 +13,7 @@ from scipy.stats import chi2, pearsonr, shapiro
 import constants
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelBinarizer
-import get_subspace_alignment_index as ai
+import subspace_alignment_index as ai
 
 
 path1 = '/Volumes/EP_Passport/emilia/data_vonMises/MSELoss_custom/validity_paradigm/3delays/probabilistic/all/sigma0.0/kappa5.0/nrec200/lr0.0001/'

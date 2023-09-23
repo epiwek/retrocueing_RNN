@@ -6,28 +6,19 @@ This file contains scripts used for testing the plane fitting methods.
 @author: emilia
 """
 
-import pickle
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # from make_stimuli import make_stimuli
-from define_model import define_model
 # from generate_data_gaussian import make_stimuli_gaussian
 # from generate_data_1hot import make_stimuli_1hot
-from generate_data_vonMises import make_stimuli_vonMises
 
-from sklearn.decomposition import PCA
-
-import vec_operations as vops 
+import vec_operations as vops
 from rep_geom_analysis import get_best_fit_plane,rotate_plane_by_angle, \
-align_plane_vecs,get_angle_between_planes_corrected, phase_alignment_corr, \
-    get_3D_coords, run_pca_pipeline
+align_plane_vecs,get_angle_between_planes_corrected, get_3D_coords, run_pca_pipeline
     
-from get_subspace_alignment_index import get_simple_AI
-
-from scipy.spatial import ConvexHull
+from subspace_alignment_index import get_simple_AI
 
 from scipy.stats import mode, shapiro
 #%%
@@ -1010,9 +1001,6 @@ def procrustes(data1, data2):
     disparity = np.sum(np.square(mtx1 - mtx2))
 
     return mtx1, mtx2, disparity, R,s
-
-from scipy.spatial.transform import Rotation as Rot
-
 
 
 def change_basis(points):

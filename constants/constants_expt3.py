@@ -16,8 +16,11 @@ from src.helpers import check_path
 
 ## TASK AND MODEL PARAMETERS ##
 PARAMS = {'n_stim': 16, 'kappa_val': 5.0, 'add_fixation': False, 'n_colCh': 17, 'n_rec': 200, 'n_out': 17,
-          'experiment_number': 3, 'n_delays': 2, 'experiment': 'Buschman_var_delays'}
+          'experiment_number': 3, 'n_delays': 2}
 PARAMS['expt_key'] = f"expt_{PARAMS['experiment_number']}"
+PARAMS['ai_vs_learning_speed'] = False  # variant of the experiment for running the AI vs learning speed analysis.
+# different from the base experiment configuration in terms of the training stop procedure used (stop training once
+# the loss falls below a hard threshold) and an increased number of models trained
 
 # PARAMS['target_type'] = 'class_label' # or 'Gaussian'
 PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh']+1)[:-1]
@@ -173,6 +176,11 @@ PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 # PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
 PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'
 PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
+if PARAMS['ai_vs_learning_speed']:
+    # Variant of the experiment for running the AI vs learning speed analysis.
+    # Different from the base experiment configuration in terms of the training stop procedure used (stop training once
+    # the loss falls below a hard threshold) and number of models trained (increased to 50)
+    PARAMS['COND_PATH'] += 'ai_vs_learning_speed/'
 
 if PARAMS['experiment_number'] == 4:
     PARAMS['COND_PATH'] += f"validity_{PARAMS['cue_validity']}/5_cycles/"
