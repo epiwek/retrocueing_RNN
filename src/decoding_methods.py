@@ -12,9 +12,6 @@ This file contains all decoding analysis functions, including:
     4) single-readout hypothesis : cross-decoding of cued colours across two parallel planes
     5) analogue to the CDI analysis: compare the discriminability of colour 
         representations pre-cue, after they are cued and uncued
-    6) analogue to the rotated/unrotated plane AI analysis: compare the 
-        cross-temporal generalisation scores (between the precue and postcue 
-        delays) between the two cued planes
 
 1) This analysis asks if there is still information about the uncued item 
     colour in the post-cue delay.
@@ -31,18 +28,6 @@ This file contains all decoding analysis functions, including:
     in cross-validation to discriminate between colours in the pre-cue delay, 
     as well as after they are cued or uncued, and the test scores compared 
     between the 3 conditions.
-5) This analysis seeks to confirm the conclusion from Fig. 2H, that is only one
-    of the pre-cue planes being rotated to form the parallel plane geometry in 
-    the post-cue delay. Like for the corresponding AI analysis, this analysis
-    is done in 2-fold cross-validation. Cross-temporal generalisation decoders 
-    are fitted to haf the data, to find the putative 'rotated' and 'unrotated'
-    planes. Then, the analysis is repeated on the second half of the data, and 
-    scores for the 'rotated' and 'unrotated' planes saved. If all models 
-    consistently rotate noy one of the planes, then the 'unrotated' plane scores
-    should be significantly higher 1) than chance (50%) and 2) than the rotated
-    scores.
-    
-
 """
 import pickle
 import numpy as np
@@ -59,7 +44,7 @@ from mne.decoding import GeneralizingEstimator
 
 import src.helpers as helpers
 import src.generate_data_von_mises as dg
-import src.custom_plot as plotter
+import src.plotting_funcs as plotter
 from src.stats import run_contrast_single_sample, run_contrast_unpaired_samples
 
 # %% common low-level functions
@@ -480,7 +465,8 @@ def run_decoding_uncued_analysis(constants, trial_type='valid'):
     :param str trial_type: Optional. Relevant for the probabilistic paradigm (experiment 4). Pass 'valid' or 'invalid'.
         The default is 'valid'.
     """
-    print('Run the uncued colour decoding analysis for the post-cue delay')
+    print('RUNNING THE UNCUED COLOUR DECODING ANALYSIS FOR THE POST-CUE DELAY')
+    assert constants.PARAMS['experiment_number'] == 1, 'Analysis only tested for Experiment 1.'
     # get decoding test scores
     model_scores = model_looper(constants, 'postcue', run_decoding_pipeline_single_model, 'uncued', trial_type)
 
@@ -534,7 +520,6 @@ def run_ctg_pipeline_single_model(constants, model_number, time_range, item_stat
 
     # reshape data into (n_trials x n_rec x n_timepoints)
     data_shuffled = [data_subset.transpose([0, -1, 1]) for data_subset in data_shuffled]
-    print(data_shuffled[0].shape)
 
     # fit decoder
     scores = []
@@ -542,7 +527,7 @@ def run_ctg_pipeline_single_model(constants, model_number, time_range, item_stat
     for loc_data, loc_labels in zip(data_shuffled, labels_shuffled):
         scores.append(lda_cg_time(loc_data, loc_labels))
     scores = np.stack(scores)
-    scores = np.stack((scores, scores.mean(0)[None]))   # add mean across the locations as the last row
+    scores = np.concatenate((scores, scores.mean(0)[None]))   # add mean across the locations as the last row
 
     return scores
 
@@ -558,6 +543,9 @@ def run_ctg_analysis(constants, trial_type='valid', delay_length=7):
     :param int delay_length:
 
     """
+    print('RUNNING THE CROSS-TEMPORAL GENERALISATION DECODING ANALYSIS')
+    assert constants.PARAMS['experiment_number'] in [1, 3], 'Analysis only tested for Experiments 1 and 3.'
+
     t_min = 0
     # if experiment 3 (variable delays), update the length of delay intervals saved in constants to the required value
     # For example, to compare findings to those from Experiment 1, pass 7
@@ -697,7 +685,7 @@ def run_maintenance_mechanism_analysis():
     form a more temporally stable working memory code than those trained with fixed delays (Expt 1).
     """
 
-    print('Comparing the memory maintenance mechanisms between Experiments 1 & 3')
+    print('COMPARING THE MEMORY MAINTENANCE MECHANISMS BETWEEN EXPERIMENTS 1 & 3')
     # calculate the off- and on-diagonal decoding scores
     diag_scores, off_diag_scores = get_mean_delay_scores()
 
@@ -719,7 +707,10 @@ def run_cg_decoding_cued_analysis(constants, trial_type='valid'):
     :param str trial_type: Optional. Relevant for the probabilistic paradigm (experiment 4). Pass 'valid' or 'invalid'.
         The default is 'valid'.
     """
-    print('Run the cued colour decoding and cross-generalisation analysis')
+    print('RUNNING THE CUED COLOUR DECODING AND CROSS-GENERALISATION ANALYSIS - SINGLE READOUT HYPOTHESIS REPORTED IN'
+          'SUPPLEMENTARY NOTE 1')
+    assert constants.PARAMS['experiment_number'] == 1, 'Analysis only tested for Experiment 1.'
+
     # get decoding cg scores
     model_scores = model_looper(constants, 'postcue', run_decoding_pipeline_single_model, 'cued', trial_type, cg=True)
 
@@ -739,8 +730,8 @@ def run_cg_decoding_cued_analysis(constants, trial_type='valid'):
     print('...Mean cross-generalisation accuracy: %.4f' % cg_decoding_cued_postcue_delay['cross_gen_accuracy'].mean())
 
 
-# %% 5) analogue to the CDI analysis: compare the discriminability of colour representations pre-cue, after they are
-# cued and uncued
+# %% 5) analogue to the CDI analysis: compare the discriminability of colour representations pre-cue, as well as in the
+# post-cue delay (i.e., after they are cued or uncued)
 
 
 def run_colour_discrim_analysis(constants, trial_type='valid'):
@@ -756,7 +747,9 @@ def run_colour_discrim_analysis(constants, trial_type='valid'):
     """
     assert trial_type == 'valid', "Analysis not implemented for invalid trials. Add this functionality by altering " \
                                   "the 'get_colour_labels' function."
-    print('Running the colour discriminability analysis (using decoding scores).')
+    assert constants.PARAMS['experiment_number'] == 1, 'Analysis only tested for Experiment 1.'
+
+    print('RUNNING THE COLOUR DISCRIMINABILITY ANALYSIS USING DECODING SCORES - REPORTED IN SUPPLEMENTARY FIGURE S1C')
     # get the pre-cue decoding test accuracy
     # this could be rewritten as a
     model_scores_precue = model_looper(constants, 'precue', run_decoding_pipeline_single_model, 'cued',
@@ -806,214 +799,3 @@ def run_colour_discrim_analysis(constants, trial_type='valid'):
             plt.savefig(constants.PARAMS['FIG_PATH'] + ' cdi_analogue_with_decoding.svg')
 
     return
-
-
-# %% 6) analogue to the rotated/unrotated plane AI analysis: compare the
-# cross-temporal generalisation scores (between the precue and postcue 
-# delays) between the two cued planes
-
-# this function could be broken up into components in the future
-def get_decoding_unrotrot(constants, cv=2):
-    """
-    For each location, using half the data, get the cross-temporal generalisation
-    score across the two delays. Relabel the location with a higher score as
-    'unrotated' and repeat the analysis using the other half of data, this time
-    saving the ctg scores for the 'rotated' and 'unrotated' planes. If models
-    keep one pre-cue subspace unchanged, the unrotated scores should be
-    significantly higher than 1) chance and 2) the rotated scores.
-
-
-    :param module constants: A Python module containing constants and configuration data for the simulation.
-    :param int cv: Number of cross-validation folds. The default is 2.
-    :return :
-        ctg_decoding_test - array AI values for the 'unrotated' and 'rotated' planes, averaged across cv folds.
-            Format: (n_dims,(unrotated,rotated),model)
-        same_ixs : array (n_cv_folds,n_models) Indexes of the unrotated plane for each model.
-
-    """
-    # load the train and test indices
-    load_path = f"{constants.PARAMS['FULL_PATH']}pca_data/valid_trials"
-    trial_ixs = pickle.load(open(load_path + '/trial_ixs_for_unrotrot_analysis.pckl', 'rb'))
-
-    # get the indices of the endpoints of the two delays
-    d1_ix = constants.PARAMS['trial_timepoints']['delay1_end'] - 1
-    d2_ix = constants.PARAMS['trial_timepoints']['delay2_end'] - 1
-
-    # cross-validated test decoding score of the same location during the same delay
-    # i.e., how decodable is the colour information for this condition
-    test_decoding_train = np.zeros((2, 2, constants.PARAMS['n_models']))
-    test_decoding_test = np.zeros((2, 2, constants.PARAMS['n_models']))
-    # cross-temporal-generalisation decoding score. Decoder trained on a given 
-    # location with data from one delay and tested on the other delay
-    # i.e., if the plane is unrotated and phase-aligned, then the score should be
-    # very high
-    ctg_decoding_train = np.zeros((2, 2, constants.PARAMS['n_models']))
-    ctg_decoding_test = np.zeros((2, 2, constants.PARAMS['n_models']))
-    # cv folds, unrotated/rotated, model
-
-    same_ixs = np.zeros((cv, constants.PARAMS['n_models']))  # ixs of the unrotated plane
-
-    for model in range(constants.PARAMS['n_models']):
-        # load model data
-        eval_data = load_model_data(constants, model)
-        # extract the train and test indices
-        train, test = trial_ixs['train'][str(model)], trial_ixs['test'][str(model)]
-
-        for i in range(cv):
-            # get the train and test subsets
-            data_train = eval_data['data'][train[i], :, :]
-            data_test = eval_data['data'][test[i], :, :]
-
-            labels_loc1_train = eval_data["labels"]["c1"][train[i]]
-            labels_loc2_train = eval_data["labels"]["c2"][train[i]]
-            labels_loc1_test = eval_data["labels"]["c1"][test[i]]
-            labels_loc2_test = eval_data["labels"]["c2"][test[i]]
-
-            # sort labels
-            loc1_train_sorting_ix, labels_loc1_train = helpers.sort_labels(labels_loc1_train)
-            loc2_train_sorting_ix, labels_loc2_train = helpers.sort_labels(labels_loc2_train)
-            loc1_test_sorting_ix, labels_loc1_test = helpers.sort_labels(labels_loc1_test)
-            loc2_test_sorting_ix, labels_loc2_test = helpers.sort_labels(labels_loc2_test)
-
-            # bin the labels into B colour bins
-            labels_loc1_train_binned = helpers.bin_labels(labels_loc1_train, constants.PARAMS['B'])
-            labels_loc2_train_binned = helpers.bin_labels(labels_loc2_train, constants.PARAMS['B'])
-            labels_loc1_test_binned = helpers.bin_labels(labels_loc1_test, constants.PARAMS['B'])
-            labels_loc2_test_binned = helpers.bin_labels(labels_loc2_test, constants.PARAMS['B'])
-
-            # sort the arrays
-            data_train_loc1 = data_train[loc1_train_sorting_ix, :, :]
-            data_train_loc2 = data_train[loc2_train_sorting_ix, :, :]
-            data_test_loc1 = data_test[loc1_test_sorting_ix, :, :]
-            data_test_loc2 = data_test[loc2_test_sorting_ix, :, :]
-
-            # shuffle trials
-            rng = np.random.default_rng(seed=model)
-
-            trial_order_loc1_train = rng.permutation(len(loc1_train_sorting_ix))
-            trial_order_loc2_train = rng.permutation(len(loc2_train_sorting_ix))
-            trial_order_loc1_test = rng.permutation(len(loc1_test_sorting_ix))
-            trial_order_loc2_test = rng.permutation(len(loc2_test_sorting_ix))
-
-            labels_loc1_train_binned = labels_loc1_train_binned[trial_order_loc1_train]
-            labels_loc2_train_binned = labels_loc2_train_binned[trial_order_loc2_train]
-            labels_loc1_test_binned = labels_loc1_test_binned[trial_order_loc1_test]
-            labels_loc2_test_binned = labels_loc2_test_binned[trial_order_loc2_test]
-
-            data_train_loc1 = data_train_loc1[trial_order_loc1_train, :, :]
-            data_train_loc2 = data_train_loc2[trial_order_loc2_train, :, :]
-            data_test_loc1 = data_test_loc1[trial_order_loc1_test, :, :]
-            data_test_loc2 = data_test_loc2[trial_order_loc2_test]
-
-            # run decoding to find the unrotated and rotated subspace
-
-            # do LDA to get the classification at test (same location cue and 
-            # delay, withheld trials) and cross-temporal-generalisation (same
-            # location cue, other delay) scores
-
-            # use the train data to find the location for which cross-temporal 
-            # decoding across the two delays has higher accuracy - this is the 
-            # 'unrotated' location
-            # scores format: [train_timepoint, test_timepoint]
-            scores_cg_train_loc1 = lda_cg_time(np.swapaxes(data_train_loc1[:, [d1_ix, d2_ix], :], -1, 1),
-                                               labels_loc1_train_binned)
-            scores_cg_train_loc2 = lda_cg_time(np.swapaxes(data_train_loc2[:, [d1_ix, d2_ix], :], -1, 1),
-                                               labels_loc2_train_binned)
-
-            # rotated location
-            switch_ix = np.argmin((np.array([scores_cg_train_loc1[0, 1], scores_cg_train_loc1[1, 0]]).mean(),
-                                   np.array([scores_cg_train_loc2[0, 1], scores_cg_train_loc2[1, 0]]).mean()))
-            # unrotated location
-            stay_ix = np.setdiff1d([0, 1], switch_ix)[0]
-
-            same_ixs[i, model] = stay_ix
-            # repeat the analysis using the test data
-            scores_cg_test_loc1 = lda_cg_time(np.swapaxes(data_test_loc1[:, [d1_ix, d2_ix], :], -1, 1),
-                                              labels_loc1_test_binned)
-            scores_cg_test_loc2 = lda_cg_time(np.swapaxes(data_test_loc2[:, [d1_ix, d2_ix], :], -1, 1),
-                                              labels_loc2_test_binned)
-
-            # save the data in the frame of reference of the 'rotated' and 'unrotated' plane
-            if stay_ix == 0:
-                # unrotated decoding (loc1)
-                ctg_decoding_train[i, 0, model] = np.array(
-                    [scores_cg_train_loc1[0, 1], scores_cg_train_loc1[1, 0]]).mean()
-                ctg_decoding_test[i, 0, model] = np.array([scores_cg_test_loc1[0, 1], scores_cg_test_loc1[1, 0]]).mean()
-                # rotated decoding
-                ctg_decoding_train[i, 1, model] = np.array(
-                    [scores_cg_train_loc2[0, 1], scores_cg_train_loc2[1, 0]]).mean()
-                ctg_decoding_test[i, 1, model] = np.array([scores_cg_test_loc2[0, 1], scores_cg_test_loc2[1, 0]]).mean()
-
-                # decoder accuracy on withheld data from the same delay 
-                test_decoding_train[i, 0, model] = np.array(
-                    [scores_cg_train_loc1[0, 0], scores_cg_train_loc1[1, 1]]).mean()
-                test_decoding_test[i, 0, model] = np.array(
-                    [scores_cg_test_loc1[0, 0], scores_cg_test_loc1[1, 1]]).mean()
-                test_decoding_train[i, 1, model] = np.array(
-                    [scores_cg_train_loc2[0, 0], scores_cg_train_loc2[1, 1]]).mean()
-                test_decoding_test[i, 1, model] = np.array(
-                    [scores_cg_test_loc2[0, 0], scores_cg_test_loc2[1, 1]]).mean()
-            else:
-                # unrotated decoding (loc2)
-                ctg_decoding_train[i, 0, model] = np.array(
-                    [scores_cg_train_loc2[0, 1], scores_cg_train_loc2[1, 0]]).mean()
-                ctg_decoding_test[i, 0, model] = np.array([scores_cg_test_loc2[0, 1], scores_cg_test_loc2[1, 0]]).mean()
-
-                # rotated decoding
-                ctg_decoding_train[i, 1, model] = np.array(
-                    [scores_cg_train_loc1[0, 1], scores_cg_train_loc1[1, 0]]).mean()
-                ctg_decoding_test[i, 1, model] = np.array([scores_cg_test_loc1[0, 1], scores_cg_test_loc1[1, 0]]).mean()
-
-                # decoder accuracy on withheld data from the same delay 
-                test_decoding_train[i, 0, model] = np.array(
-                    [scores_cg_train_loc2[0, 0], scores_cg_train_loc2[1, 1]]).mean()
-                test_decoding_test[i, 0, model] = np.array(
-                    [scores_cg_test_loc2[0, 0], scores_cg_test_loc2[1, 1]]).mean()
-                test_decoding_train[i, 1, model] = np.array(
-                    [scores_cg_train_loc1[0, 0], scores_cg_train_loc1[1, 1]]).mean()
-                test_decoding_test[i, 1, model] = np.array(
-                    [scores_cg_test_loc1[0, 0], scores_cg_test_loc1[1, 1]]).mean()
-
-    # save the ctg scores
-    # pickle.dump(ctg_decoding_train, open(load_path + '/ctg_decoding_train_rot_unrot.pckl', 'wb'))
-    # pickle.dump(ctg_decoding_test, open(load_path + '/ctg_decoding_test_rot_unrot.pckl', 'wb'))
-
-    # save the test decoding scores
-    # pickle.dump(test_decoding_train, open(load_path + '/test_decoding_train_rot_unrot.pckl', 'wb'))
-    # pickle.dump(test_decoding_test, open(load_path + '/test_decoding_test_rot_unrot.pckl', 'wb'))
-
-    # export to csv for JASP
-    # ctg_scores_jasp = pd.DataFrame(data=ctg_decoding_test.mean(0).T, columns=['unrotated', 'rotated'])
-    # ctg_scores_jasp.to_csv(load_path + '/ctg_decoding_test_jasp.csv')
-
-    # save the unrotated plane ixs
-    # pickle.dump(same_ixs, open(load_path + '/unrot_plane_ixs_ctg_decoding.pckl', 'wb'))
-
-    # plot the ctg scores for unrotated and rotated planes
-    plotter.plot_AI(constants, ctg_decoding_test.mean(0)[None, :, :], 'cued')
-    plt.xticks([1.875, 2.125], labels=['unrotated', 'rotated'])
-    plt.ylabel('ctg decoding accuracy')
-    plt.xlabel('Cued colour plane')
-    plt.legend([])
-
-    if constants.PLOT_PARAMS['save_plots']:
-        plt.savefig(constants.PARAMS['FIG_PATH'] + 'ctg_decoding_acc_rotunrot.png')
-        plt.savefig(constants.PARAMS['FIG_PATH'] + 'ctg_decoding_acc_rotunrot.svg')
-
-    # run stats
-    # contrast 1: unrotated > chance (0.5)
-    print('Contrast 1: unrotated > chance (0.5)')
-    print('Mean = %.2f' % (ctg_decoding_test.mean(0)[0, :].mean() * 100))
-    run_contrast_single_sample(ctg_decoding_test.mean(0)[0, :], .5, alt='greater')
-
-    # contrast 2: rotated =/= chance
-    # note here we should be doing a Bayesian test - done in JASP
-    print('Contrast 2: rotated =/= chance (0.5)')
-    print('Mean = %.2f' % (ctg_decoding_test.mean(0)[1, :].mean() * 100))
-    run_contrast_single_sample(ctg_decoding_test.mean(0)[1, :], .5, alt='two-sided')
-
-    # contrast 3: unrotated > rotated
-    print('Contrast 3: unrotated > rotated (0.5)')
-    run_contrast_single_sample(ctg_decoding_test.mean(0)[0, :] - ctg_decoding_test.mean(0)[1, :], 0, alt='greater')
-
-    return ctg_decoding_test, same_ixs
