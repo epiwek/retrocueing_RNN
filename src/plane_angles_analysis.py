@@ -5,6 +5,8 @@ Created on Mon Nov 23 10:34:57 2020
 
 @author: emilia
 
+This file contains functions to analyse plane angles.
+
 requires the pycircstat toolbox, available at https://github.com/circstat/pycircstat
 """
 
