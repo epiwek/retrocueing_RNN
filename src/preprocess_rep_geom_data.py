@@ -9,8 +9,7 @@ from sklearn.model_selection import StratifiedKFold
 def get_delay_timepoints(constants):
     """
     Extracts the endpoints of the delay intervals.
-    :param constants: Experimental constants
-    :type constants: module
+    :param module constants: A Python module containing constants and configuration data for the simulation.
     :return: list of indices corresponding to the delay end timepoints
     """
     # if experiment 3, update the length of delay intervals saved in constants
@@ -34,13 +33,10 @@ def get_cv_trial_ixs(constants, model_seed, cv=2):
     """
     Split the data into cross-validation folds and get the corresponding trial indices.
 
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param model_seed : Seed parameter for the stratified K-fold cross-validator object. Pass model number for
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param int model_seed : Seed parameter for the stratified K-fold cross-validator object. Pass model number for
         reproducibility.
-    :type model_seed: int
-    :param cv: Optional. Number of cross-validation folds. The default is 2.
-    :type cv: int
+    :param int cv: Optional. Number of cross-validation folds. The default is 2.
     :return: arrays with train and test sets indices.
     """
     n_samples = constants.PARAMS['n_trial_types'] * constants.PARAMS['n_trial_instances_test']
@@ -201,12 +197,10 @@ def reshape_CDI_coords(constants, cued_up_coords, cued_down_coords):
     Reshape the 3D coordinates into a nested list of the following format: (n_validity types, n_delays, n_locations,
     n_colours), where locations are defined as 'cued' and 'uncued'.
 
-    :param constants: Experimental constants
-    :type constants: module
-    :param cued_up_coords: 3D coordinates fitted to the data from the 'cued_up_uncued_down' trials (n_datapoints, 3)
-    :type cued_up_coords: np.ndarray
-    :param cued_down_coords: analogous coordinates for the 'cued_down_uncued_up' trials
-    :type cued_down_coords: np.ndarray
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param np.ndarray cued_up_coords: 3D coordinates fitted to the data from the 'cued_up_uncued_down' trials
+        (n_datapoints, 3)
+    :param np.ndarray cued_down_coords: analogous coordinates for the 'cued_down_uncued_up' trials
     :return: cued_up_reshaped, cued_down_reshaped, dim_numbers (dictionary with n_timepoints, n_locations, n_colours and
     n_validity types).
     """
@@ -235,8 +229,7 @@ def get_CDI_coord_row_indices(constants):
     Returns 3 outputs: array with all indices for a given condition (numpy array), dimension names (list) and dimension
     numbers (list).
 
-    :param constants: Experimental constants
-    :type constants: module
+    :param module constants: A Python module containing constants and configuration data for the simulation.
     :return: all_ixs, dim_names, dim_numbers
     """
     # get the row indices corresponding to the different conditions (defined by the validity type (valid/invalid) x
@@ -280,18 +273,15 @@ def preprocess_CDI_data(constants, all_data_valid, all_data_invalid=None):
     data arrays under 'cued_up_uncued_down' and 'cued_down_uncued_up' sub-keys. For example, to access the data from
     'cued_up' trials for model 0, we would call: all_data[0]['cued_up_uncued_down']
 
-    :param constants: Experimental constants
-    :type constants: module
-    :param all_data_valid: dictionary containing the data from valid trials. Keys correspond to model numbers, and each
-        model entry contains sub-keys corresponding to the geometry names, with data stored under 'data'. For the
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param dict all_data_valid: dictionary containing the data from valid trials. Keys correspond to model numbers, and
+        each model entry contains sub-keys corresponding to the geometry names, with data stored under 'data'. For the
         purpose of this function, each model-level sub-dictionary must contain the 'cued_up_uncued_down' and
         'cued_down_uncued_up' keys. E.g., for model 0, data from the 'cued_up_uncued_down' trials would be stored under:
         all_data_valid[0]['cued_up_uncued_down']['data']. For more information, consult the 'get_all_binned_data'
         function in rep_geom_analysis.py
-    :type all_data_valid: dict
-    :param all_data_invalid: Optional. Analogous dictionary containing the data from invalid trials (relevant for
+    :param dict all_data_invalid: Optional. Analogous dictionary containing the data from invalid trials (relevant for
         Experiment 3). Default is None (appropriate for all other experiments).
-    :type all_data_invalid: dict
     :return: all_data dictionary, indexed by model number keys, with each model entry containing the aggregated data
         under the 'cued_up_uncued_down' and 'cued_down_uncued_up' keys.
     """
@@ -360,11 +350,9 @@ def get_unrotated_rotated_data(constants, get_test_train_split=False):
 
     all_data[m,cv]['train']['loc1']
 
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param get_test_train_split: Optional. Flag determining whether to draw the cross validation folds. If False, loads
-        from file. Default is True.
-    :param get_test_train_split: bool
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param bool get_test_train_split: Optional. Flag determining whether to draw the cross validation folds. If False,
+        loads from file. Default is True.
     :return: all_data array (n_models, n_cv_folds)
     """
     base_path = constants.PARAMS['FULL_PATH']
@@ -430,13 +418,10 @@ def get_all_binned_data(constants, trial_type='valid', probed_unprobed=False):
     with keys corresponding to the number models. Each model sub-dictionary contains keys corresponding to the above
     data structures. Geometry names are additionally saved into the geometry_names list.
 
-    :param constants: Experimental constants module.
-    :type constants: module
-    :param trial_type: Optional. Pass 'valid' or 'invalid', default is 'valid'.
-    :type trial_type: str
-    :param probed_unprobed: Optional. Pass True if you want to include the 'probed' and 'unprobed' geometry data
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    :param str trial_type: Optional. Pass 'valid' or 'invalid', default is 'valid'.
+    :param bool probed_unprobed: Optional. Pass True if you want to include the 'probed' and 'unprobed' geometry data
         (for Experiment 3). Default is False.
-    :type probed_unprobed: bool
     :return: geometry_names: list, all_data : dictionary with data for each model and geometry
 
     .. Note:: For example, to extract the data dictionary containing the data averaged across uncued colours and
@@ -468,8 +453,7 @@ def get_CDI_data(constants):
     cued_up_uncued_down). Data is aggregated across cued and uncued items (and valid and invalid trials where
     appropriate) from the delay end timepoints.
 
-    :param constants: Experimental constants module.
-    :type constants: module
+    :param module constants: A Python module containing constants and configuration data for the simulation.
     :return: cdi_data nested dictionary with model number keys, each containing the 'cued_up_uncued_down' and
     'cued_down_uncued_up' sub-keys containing the data.
 
