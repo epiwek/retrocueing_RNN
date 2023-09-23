@@ -1,5 +1,8 @@
-# This file contains classes used to fit a 3D subspace as well as find the best-fitting planes for a given dataset.
+"""
+This file contains classes used to fit a 3D subspace as well as find the best-fitting planes for a given dataset.
 
+@author: emilia
+"""
 import numpy as np
 from numpy.linalg import lstsq
 from sklearn.decomposition import PCA
@@ -8,6 +11,9 @@ import src.vec_operations as vops
 
 
 class SinglePlaneSubspace:
+    """
+    Use this class to fit a 2D subspace (i.e., a plane) to data from a single cue location.
+    """
     def __init__(self, coords_3d):
         self.coords_3d = coords_3d
         self.fitted_plane = None
@@ -21,14 +27,14 @@ class SinglePlaneSubspace:
 
     def get_best_fit_plane(self):
         """
-            Fit a plane to datapoints using PCA.
+        Fit a plane to datapoints using PCA.
 
-            Returns
-            -------
-            fitted_plane : sklearn.decomposition.PCA object
-                fitted_plane.components_ gives the plane vectors
+        Returns
+        -------
+        fitted_plane : sklearn.decomposition.PCA object
+            fitted_plane.components_ gives the plane vectors
 
-            """
+        """
         # center data
         data_centered = self.coords_3d - np.mean(self.coords_3d)
 
@@ -66,7 +72,7 @@ class SinglePlaneSubspace:
     def project_onto_plane(self):
         """
         Project the 3D datapoints onto the best fitting plane. Returns the 3D coordinates of the projections.
-        :return:
+        :return: points_projected
         """
         if self.fitted_plane is None:
             self.get_best_fit_plane()
@@ -81,7 +87,7 @@ class SinglePlaneSubspace:
         Compress the datapoints to 2D by projecting them onto the best fit plane and discarding the z-coordinate.
         Note the returned coordinates are expressed in the basis defined by the plane-defining vectors and the
         plane normal.
-        :return:
+
         """
         # project points onto the plane
         points_projected = self.project_onto_plane()
@@ -100,7 +106,7 @@ class SinglePlaneSubspace:
     def check_is_concave(self):
         """
         Check if the quadrilateral formed by the datapoints is concave.
-        :return:
+
         """
         points_2d = self.compress_to_2d()
 
@@ -114,7 +120,7 @@ class SinglePlaneSubspace:
     def detect_bowtie(self):
         """
         Detect a bowtie geometry.
-        :return:
+ 
         """
         # compress to 2D
         points_2d = self.compress_to_2d()
@@ -159,8 +165,12 @@ class SinglePlaneSubspace:
 
 
 class Geometry:
+    """
+    Use this class to fit a 3D subspace to data from a pair of conditions (e.g., for Cued geometry - cued colour
+    representations for cued-upper and cued-lower trials). Data should contain only one timepoint.
+    """
     def __init__(self, data, constants, subspace_labels=None):
-        self.data = data
+        self.data = data  # shape (n_colours * n_locations, n_neurons)
         self.n_colours = constants.PARAMS['B']
         if subspace_labels is not None:
             self.subspace1_label = subspace_labels[0]
@@ -196,7 +206,6 @@ class Geometry:
     def get_best_fit_planes(self):
         """
         Fit planes to the location-specific colour coordinates.
-        :return:
         """
         if self.coords_3d is None:
             # run first PCA
@@ -242,7 +251,6 @@ class Geometry:
     def correct_plane_bases(self):
         """
         Set the plane basis vectors to correspond to sides of the quadrilateral as the basis for planes 1 and 2.
-        :return:
         """
         # pick corresponding sides of the quadrilateral
         side_ixs = self.pick_quadrilateral_sides()
@@ -312,6 +320,7 @@ class Geometry:
         self.plane2_basis_corrected = np.concatenate((plane_vecs_aligned[1], normal2_aligned[None, :]), axis=0).T
 
     def get_cos_plane_angle_theta(self):
+        """ Calculate the cosine of plane angle theta """
         # align the plane-defining vectors with respect to the sides of the quadrilateral
         self.correct_plane_bases()
 
@@ -326,6 +335,7 @@ class Geometry:
         return self.cos_theta, normal1, normal2
 
     def get_plane_angle_theta_sign(self):
+        """ Get the sign of plane angle theta """
         _, normal1, normal2 = self.get_cos_plane_angle_theta()
         # define the sign of the angle
         # this is an arbitrary distinction, but necessary to do circular statistics
@@ -344,7 +354,6 @@ class Geometry:
     def get_theta_degrees(self):
         """
         Get the signed angle between planes in degrees.
-        :return:
         """
         sign_theta = self.get_plane_angle_theta_sign()
 
@@ -359,7 +368,6 @@ class Geometry:
         """
         Force the two planes two be coplanar, to calculate the phase alignment angle between the corresponding
         datapoints.
-
         """
         # points, normal1, normal2
         # get 3d coords and fitted planes
