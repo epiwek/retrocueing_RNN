@@ -893,10 +893,11 @@ def plot_AI(constants, ai_table, geometry_name):
         jitter = np.array([0.25 / 2, 0.25 / 2, 0.25])
         jitter_sign = np.array([-1, 1, 1])
     elif geometry_name in ['cued_uncued', 'cued_up_uncued_down', 'cued_down_uncued_up']:
-        cols = ['k']
-        labels = [geometry_name]
-        alphas = [.2]
-        jitter, jitter_sign = np.array([0]), np.array([0])
+        cols = ['k', 'k']
+        labels = geometry_name
+        alphas = [.2, .4]
+        jitter = np.array([0.25 / 2])
+        jitter_sign = np.array([0])
     else:
         pal = sns.color_palette("dark")
         inds = [3, 0]
@@ -904,16 +905,17 @@ def plot_AI(constants, ai_table, geometry_name):
         cols.append('k')
         alphas = [.2, .2, .2]
         labels = ['pre-cue', 'post-cue', 'post-probe']
-        jitter = np.array([0.25 / 2, 0.25 / 2, 0.25])
+        jitter = np.array([0.25 / 2, 0.25 / 2, 0.25 * (3/2)])
         jitter_sign = np.array([-1, 1, 1])
 
     ms = 16
     n_dims = ai_table.shape[0]  # n of dimensions for which AI was calculated
     n_conditions = ai_table.shape[1]  # n timepoints
-    plt.figure(figsize=(6.65, 5), num=f'AI {geometry_name}')
-
     x_vals = np.arange(n_dims) + 2  # dimensionality values for which AI was calculated, starting at 2
 
+    assert n_conditions == len(jitter), 'Each condition should have a corresponding jitter value'
+
+    plt.figure(figsize=(6.65, 5), num=f'AI {geometry_name}')
     for dim in range(n_dims):
         for cond in range(n_conditions):
             # plot individual model datapoints (as dots)
