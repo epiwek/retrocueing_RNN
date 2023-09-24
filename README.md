@@ -1,5 +1,7 @@
 # retrocueing_RNN
 
+[![DOI](https://zenodo.org/badge/531965284.svg)](https://zenodo.org/badge/latestdoi/531965284)
+
 This repo contains simulations published in the following paper:
 
 Piwek, Stokes, & Summerfield (2023) A recurrent neural network model of prefrontal brain activity during a working memory task. PLOS Computational Biology (in press)
@@ -13,5 +15,3 @@ We find that the internal representations learnt by the RNN are a close match to
 We extend these results by analysing variants of the original task. This includes a manipulation of the relative lengths of the memory delays. We also analyse behavioural performance and internal representations on a probabilistic condition where the retro-cue input is not fully reliable (i.e., it can point to the incorrect item).
 
 To run the simulations, pick an appropriate experimental configuration file from the 'constants/' folder and pass it to the run_experiment() function in 'main.py'.
-
-[![DOI](https://zenodo.org/badge/531965284.svg)](https://zenodo.org/badge/latestdoi/531965284)
