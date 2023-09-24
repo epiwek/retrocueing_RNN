@@ -24,8 +24,8 @@ PARAMS = {'n_stim':16,
           'n_out':17}                   
 
 PARAMS['experiment_number'] = 2
+PARAMS['expt_key'] = 'expt_2_delay2_0cycles'
 PARAMS['n_delays'] = 2
-PARAMS['expt_key'] = 'expt_2_delay2_1cycles'
 PARAMS['ai_vs_learning_speed'] = False  # variant of the experiment for running the AI vs learning speed analysis.
 # different from the base experiment configuration in terms of the training stop procedure used (stop training once
 # the loss falls below a hard threshold) and an increased number of models trained
@@ -33,7 +33,7 @@ PARAMS['ai_vs_learning_speed'] = False  # variant of the experiment for running 
 PARAMS['n_trial_types'] = (PARAMS['n_stim']**2)*2
 PARAMS['trial_timings'] = {}
 PARAMS['trial_timings']['stim_dur']=1
-PARAMS['trial_timings']['delay1_dur'] = 13
+PARAMS['trial_timings']['delay1_dur'] = 14
 PARAMS['trial_timings']['cue_dur']= 1
 PARAMS['trial_timings']['delay2_dur'] = 14 - PARAMS['trial_timings']['delay1_dur']
 PARAMS['trial_timings']['probe_dur'] = 0
@@ -196,23 +196,17 @@ PARAMS['n_inp'] = TRAINING_DATA['inputs'].shape[-1]
 PARAMS['B'] = 4  # number of colour bins
 PARAMS['L'] = 2  # number of cue locations
 PARAMS['M'] = PARAMS['B'] * PARAMS['L']  # total number of bins
-    
 
-PLOT_PARAMS = {}
+
 PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 
 #%% PATHS ##
-# this is what you need to set
-PARAMS['BASE_PATH'] = 'your_datafolder/'
-PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'
 
-# path to the datafiles from the current experiment
+# PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
+PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'
 PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
-if PARAMS['ai_vs_learning_speed']:
-    # Variant of the experiment for running the AI vs learning speed analysis.
-    # Different from the base experiment configuration in terms of the training stop procedure used (stop training once
-    # the loss falls below a hard threshold) and number of models trained (increased to 50)
-    PARAMS['COND_PATH'] += 'ai_vs_learning_speed/'
+# common path for all experiment 2 variants - for saving plots and data structures
+PARAMS['EXPT2_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
 
 if PARAMS['experiment_number'] == 4:
     PARAMS['COND_PATH'] += f"validity_{PARAMS['cue_validity']}/5_cycles/"
@@ -222,9 +216,6 @@ elif PARAMS['experiment_number'] == 2:
 print(PARAMS['COND_PATH'])  # print the condition path to the console
 check_path(PARAMS['COND_PATH'])
 
-# common path for all experiment 2 variants - for saving plots and data structures
-PARAMS['EXPT2_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
-
 # full parameterisation
 PARAMS['FULL_PATH'] = f"{PARAMS['COND_PATH']}sigma{PARAMS['sigma']}/kappa{PARAMS['kappa_val']}/nrec{PARAMS['n_rec']}/" \
                       f"lr{PARAMS['learning_rate']}/"
@@ -232,5 +223,6 @@ PARAMS['FULL_PATH'] = f"{PARAMS['COND_PATH']}sigma{PARAMS['sigma']}/kappa{PARAMS
 PARAMS['FIG_PATH'] = f"{PARAMS['FULL_PATH']}figs/"
 check_path(PARAMS['FIG_PATH'])  # create the figure folder if it doesn't exist
 
+PARAMS['MATLAB_PATH'] = '/Users/emilia/OneDrive - Nexus365/MATLAB/rnn_retrocue_data/'
 PARAMS['RAW_DATA_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"
 PARAMS['RESULTS_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"

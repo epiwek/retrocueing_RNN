@@ -3,19 +3,18 @@
 """
 Created on Fri Jan 29 18:04:08 2021
 
-This is the configuration file for Experiment 1.
-
-
 @author: emilia
 """
+import os
 import numpy as np
 import itertools
 import torch
 import seaborn as sns
+from scipy.stats import norm
 from src.generate_data_von_mises import make_stimuli_vonMises
 from src.helpers import check_path
 
-#%% TASK AND MODEL PARAMETERS ##
+## TASK AND MODEL PARAMETERS ##
 
 PARAMS = {'n_stim': 16,
           'kappa_val': 5.0,
@@ -24,23 +23,23 @@ PARAMS = {'n_stim': 16,
           'n_rec': 200,
           'n_out': 17}
 
-PARAMS['experiment_number'] = 1
-PARAMS['expt_key'] = f"expt_{PARAMS['experiment_number']}"
-PARAMS['ai_vs_learning_speed'] = False  # variant of the experiment for running the AI vs learning speed analysis.
-# different from the base experiment configuration in terms of the training stop procedure used (stop training once
-# the loss falls below a hard threshold) and number of models trained (increased to 100)
-PARAMS['n_delays'] = 2
-PARAMS['target_type'] = 'angle_val'  # 'class_label' # or 'Gaussian'
-PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh'] + 1)[:-1]
+PARAMS['experiment_number'] = 4
+PARAMS['n_delays'] = 3
+PARAMS['experiment'] = 'validity_paradigm'
+PARAMS['expt_key'] = 'expt_4_cue_val_0.5'
+PARAMS['ai_vs_learning_speed'] = True  # variant of the experiment for running the AI vs learning speed analysis.
+# Different from the base experiment configuration only in terms of the number of models trained (increased to 100)
 
 PARAMS['n_trial_types'] = (PARAMS['n_stim'] ** 2) * 2
 PARAMS['trial_timings'] = {}
 PARAMS['trial_timings']['stim_dur'] = 1
-PARAMS['trial_timings']['delay1_dur'] = 7
+PARAMS['trial_timings']['delay1_dur'] = 5
 PARAMS['trial_timings']['cue_dur'] = 1
-PARAMS['trial_timings']['delay2_dur'] = 7
-PARAMS['trial_timings']['probe_dur'] = 0
-PARAMS['trial_timings']['delay3_dur'] = 0
+PARAMS['trial_timings']['delay2_dur'] = 5
+PARAMS['trial_timings']['probe_dur'] = 1
+PARAMS['trial_timings']['delay3_dur'] = 5
+
+PARAMS['phi'] = torch.linspace(-np.pi, np.pi, PARAMS['n_colCh'] + 1)[:-1]
 
 # variable delay params
 PARAMS['var_delays'] = False
@@ -49,7 +48,7 @@ if PARAMS['var_delays']:
 
     PARAMS['delay_lengths'] = [2, 5, 6, 8]
     PARAMS['default_length'] = 5
-    PARAMS['which_delay'] = 'both'  # which delay should have variable lengths: first, second or both
+    PARAMS['which_delay'] = 'both'  # first, second or both
 
     if PARAMS['which_delay'] == 'both':
         PARAMS['delay_combos'] = torch.tensor(list(itertools.combinations_with_replacement(PARAMS['delay_lengths'], 2)))
@@ -94,10 +93,24 @@ PARAMS['trial_timepoints']['delay2_end'] = PARAMS['trial_timings']['stim_dur'] \
                                            + PARAMS['trial_timings']['delay1_dur'] + PARAMS['trial_timings']['cue_dur'] \
                                            + PARAMS['trial_timings']['delay2_dur']
 
-PARAMS['test_delay_lengths'] = [7, 10, 4]
+if PARAMS['experiment_number'] == 4:
+    PARAMS['trial_timepoints']['delay3_start'] = \
+        PARAMS['trial_timings']['stim_dur'] \
+        + PARAMS['trial_timings']['delay1_dur'] \
+        + PARAMS['trial_timings']['cue_dur'] \
+        + PARAMS['trial_timings']['delay2_dur'] \
+        + PARAMS['trial_timings']['probe_dur']
+
+    PARAMS['trial_timepoints']['delay3_end'] = \
+        PARAMS['trial_timings']['stim_dur'] \
+        + PARAMS['trial_timings']['delay1_dur'] \
+        + PARAMS['trial_timings']['cue_dur'] \
+        + PARAMS['trial_timings']['delay2_dur'] \
+        + PARAMS['trial_timings']['probe_dur'] \
+        + PARAMS['trial_timings']['delay3_dur']
 
 # noise params
-PARAMS['sigma'] = 0.07  # scaling factor for noise (boundary if uniform, s.d. if normal)
+PARAMS['sigma'] = 0.0  # scaling factor for noise (boundary if uniform, s.d. if normal)
 PARAMS['noise_type'] = 'hidden'  # hidden or input
 PARAMS['noise_distr'] = 'normal'  # normal or uniform
 PARAMS['noise_period'] = 'all'
@@ -115,13 +128,16 @@ elif PARAMS['noise_period'] == 'probe_and_delays':
 elif PARAMS['noise_period'] == 'all':
     PARAMS['noise_timesteps'] = np.arange(PARAMS['seq_len'])
 elif PARAMS['noise_period'] == 'none':
-    PARAMS['noise_timesteps'] = 'none'
+    PARAMS['noise_timesteps'] = []
 else:
     ValueError('Invalid noise period.')
 
+PARAMS['sigma'] = np.sqrt(PARAMS['sigma'] ** 2 / len(PARAMS['noise_timesteps']))
+
 # cue validity params
-PARAMS['add_probe'] = False
-PARAMS['cue_validity'] = 1  # proportion of trials where the retrocued and probed locations match
+
+PARAMS['add_probe'] = True
+PARAMS['cue_validity'] = .5  # proportion of trials where the retrocued and probed locations match
 
 if PARAMS['cue_validity'] == 1:
     PARAMS['condition'] = 'deterministic'
@@ -132,26 +148,26 @@ else:
 
 # %% TRAINING PARAMETERS ##
 
-PARAMS['n_models'] = 30
-
-PARAMS['n_epochs'] = 1500
+PARAMS['n_models'] = 100
+PARAMS['n_epochs'] = 2000
 PARAMS['learning_rate'] = 10 ** (-4)
 PARAMS['init_scale'] = 1
 # 'init_scale' - factor by which the weight init should be scaled - needed in 
 # order to be able to train longer sequences without hidden noise
-PARAMS['criterion_type'] = 'loss_der'  # 'abs_loss' # or 'loss_der'
-PARAMS['MSE_criterion'] = 0.0005
-PARAMS['conv_criterion'] = {}  # parameters for the loss_der convergence criterin
+
+PARAMS['criterion_type'] = 'abs_loss'  # 'abs_loss' # or 'loss_der'
+PARAMS['MSE_criterion'] = 0.0005  # loss threshold if the criterion is just some value of loss ('abs_loss')
+# parameters for the loss_der convergence criterion - consult the 'apply_conv_criterion' function in retrocue_model.py
+PARAMS['conv_criterion'] = {}
 PARAMS['conv_criterion']['smooth_sd'] = 3
-PARAMS['conv_criterion']['window'] = 15  # smoothing window
+PARAMS['conv_criterion']['window'] = 15  # number of epochs used in the convergence criterion
 PARAMS['conv_criterion']['thr_slope'] = -2e-05  # threshold for the dLoss/dt value
-PARAMS['conv_criterion']['thr_loss'] = 0.0036
-# threshold for the loss value - set to the level that corresponds to monkey performance
+PARAMS['conv_criterion']['thr_loss'] = 0.0036  # threshold for the loss value
 
-PARAMS['n_jobs'] = 10  # number of jobs to run in parallel
+PARAMS['n_jobs'] = 10
 
-PARAMS['n_trial_instances'] = 1  # for training
-PARAMS['n_trial_instances_test'] = 100  # for test
+PARAMS['n_trial_instances'] = 1  # n trial repetitions in the training dataset
+PARAMS['n_trial_instances_test'] = 100  # n trial repetitions in the test dataset
 PARAMS['stim_set_size'] = PARAMS['n_trial_types'] * PARAMS['n_trial_instances']
 
 PARAMS['batch_size'] = 1  # for mini-batch training
@@ -165,7 +181,7 @@ if PARAMS['var_delays']:
 # make a base training dataset - no noise, trials ordered by the cued colour
 TRAINING_DATA = make_stimuli_vonMises(PARAMS, epoch='test')
 
-#%%  binning params for PCA analysis
+#%% binning params for PCA analysis
 PARAMS['n_inp'] = TRAINING_DATA['inputs'].shape[-1]
 PARAMS['B'] = 4  # number of colour bins
 PARAMS['L'] = 2  # number of cue locations
@@ -174,17 +190,10 @@ PARAMS['M'] = PARAMS['B'] * PARAMS['L']  # total number of bins
 PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 
 # %% PATHS ##
-# this is what you need to set
-PARAMS['BASE_PATH'] = 'your_datafolder/'
-PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'
 
-# path to the datafiles from the current experiment
-PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}/experiment_{PARAMS['experiment_number']}/"
-if PARAMS['ai_vs_learning_speed']:
-    # Variant of the experiment for running the AI vs learning speed analysis.
-    # Different from the base experiment configuration in terms of the training stop procedure used (stop training once
-    # the loss falls below a hard threshold) and number of models trained (increased to 50)
-    PARAMS['COND_PATH'] += 'ai_vs_learning_speed/'
+# PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
+PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'
+PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
 
 if PARAMS['experiment_number'] == 4:
     PARAMS['COND_PATH'] += f"validity_{PARAMS['cue_validity']}/5_cycles/"
@@ -201,5 +210,6 @@ PARAMS['FULL_PATH'] = f"{PARAMS['COND_PATH']}sigma{PARAMS['sigma']}/kappa{PARAMS
 PARAMS['FIG_PATH'] = f"{PARAMS['FULL_PATH']}figs/"
 check_path(PARAMS['FIG_PATH'])  # create the figure folder if it doesn't exist
 
+PARAMS['MATLAB_PATH'] = '/Users/emilia/OneDrive - Nexus365/MATLAB/rnn_retrocue_data/'
 PARAMS['RAW_DATA_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"
 PARAMS['RESULTS_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"

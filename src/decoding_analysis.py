@@ -202,7 +202,7 @@ def load_model_data(constants, model_number, trial_type='valid', binned=False):
     :return:
     """
     # load eval data for a single model
-    load_path = f"{constants.PARAMS['FULL_PATH']}pca_data/{trial_type}_trials/"
+    load_path = f"{constants.PARAMS['RESULTS_PATH']}/{trial_type}_trials/"
 
     if binned:
         # load pca data
@@ -471,7 +471,7 @@ def run_decoding_uncued_analysis(constants, trial_type='valid'):
     model_scores = model_looper(constants, 'postcue', run_decoding_pipeline_single_model, 'uncued', trial_type)
 
     # save to file
-    # save_path = f"{constants.PARAMS['FULL_PATH']}pca_data/{trial_type}_trials/"
+    # save_path = f"{constants.PARAMS['RESULTS_PATH']}/{trial_type}_trials/"
     # with open(f"{save_path}decoding_acc_uncued_postcue_delay.pckl", 'wb') as f:
     #     pickle.dump(model_scores, f)
 
@@ -664,17 +664,17 @@ def run_all_contrasts(off_diag_scores, diag_scores):
     """
     # contrast 1: test variable delays off-diagonal mean against chance (0.5)
     print('...Contrast 1: Variable delays mean ctg decoding > chance')
-    run_contrast_single_sample(off_diag_scores[:, 0], h_mean=.5, alt='greater')
+    run_contrast_single_sample(off_diag_scores[:, 0], h_mean=.5, alt='greater', try_log_transform=True)
     print('... mean = %.2f' % off_diag_scores[:, 0].mean())
     # contrast 2: test fixed delays off-diagonal mean against chance (0.5)
     print('...Contrast 2: Fixed delays mean ctg decoding > chance')
-    run_contrast_single_sample(off_diag_scores[:, 1], h_mean=.5, alt='greater')
+    run_contrast_single_sample(off_diag_scores[:, 1], h_mean=.5, alt='greater', try_log_transform=True)
     print('... mean = %.2f' % off_diag_scores[:, 1].mean())
     # contrast 3: test if mean off-/diagonal ratio for variable delays > fixed delays
     print('...Contrast 3: Variable delays mean ratio off-/diagonal decoding > fixed delays')
     run_contrast_unpaired_samples(off_diag_scores[:, 0] / diag_scores[:, 0],
                                   off_diag_scores[:, 1] / diag_scores[:, 1],
-                                  alt='greater')
+                                  alt='greater', try_log_transform=True)
     return
 
 
@@ -716,7 +716,7 @@ def run_cg_decoding_cued_analysis(constants, trial_type='valid'):
 
     # save into file
     cg_decoding_cued_postcue_delay = {'test_accuracy': model_scores[:, 0], 'cross_gen_accuracy': model_scores[:, 1]}
-    # save_path = f"{constants.PARAMS['FULL_PATH']}pca_data/{trial_type}_trials/"
+    # save_path = f"{constants.PARAMS['RESULTS_PATH']}/{trial_type}_trials/"
     # with open(f"{save_path}cg_decoding_cued_postcue_delay.pckl", 'wb') as f:
     #     pickle.dump(cg_decoding_cued_postcue_delay, f)
 
@@ -776,7 +776,7 @@ def run_colour_discrim_analysis(constants, trial_type='valid'):
         labels = ['pre-cue', 'cued', 'uncued']
 
     # load the post-cue (uncued and cued) test accuracies from file
-    data_path = f"{constants.PARAMS['FULL_PATH']}pca_data/{trial_type}_trials/"
+    data_path = f"{constants.PARAMS['RESULTS_PATH']}/{trial_type}_trials/"
     pickle.dump(all_scores, open(data_path + 'cdi_analogous_decoding_scores.pckl', 'wb'))
     # export to csv for JASP
     scores_tbl = pd.DataFrame(all_scores, columns=labels)

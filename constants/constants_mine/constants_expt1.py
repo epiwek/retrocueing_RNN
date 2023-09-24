@@ -8,6 +8,7 @@ This is the configuration file for Experiment 1.
 
 @author: emilia
 """
+import os
 import numpy as np
 import itertools
 import torch
@@ -49,7 +50,7 @@ if PARAMS['var_delays']:
 
     PARAMS['delay_lengths'] = [2, 5, 6, 8]
     PARAMS['default_length'] = 5
-    PARAMS['which_delay'] = 'both'  # which delay should have variable lengths: first, second or both
+    PARAMS['which_delay'] = 'both'  # first, second or both
 
     if PARAMS['which_delay'] == 'both':
         PARAMS['delay_combos'] = torch.tensor(list(itertools.combinations_with_replacement(PARAMS['delay_lengths'], 2)))
@@ -141,14 +142,14 @@ PARAMS['init_scale'] = 1
 # order to be able to train longer sequences without hidden noise
 PARAMS['criterion_type'] = 'loss_der'  # 'abs_loss' # or 'loss_der'
 PARAMS['MSE_criterion'] = 0.0005
-PARAMS['conv_criterion'] = {}  # parameters for the loss_der convergence criterin
+PARAMS['conv_criterion'] = {}
 PARAMS['conv_criterion']['smooth_sd'] = 3
-PARAMS['conv_criterion']['window'] = 15  # smoothing window
+PARAMS['conv_criterion']['window'] = 15
 PARAMS['conv_criterion']['thr_slope'] = -2e-05  # threshold for the dLoss/dt value
 PARAMS['conv_criterion']['thr_loss'] = 0.0036
 # threshold for the loss value - set to the level that corresponds to monkey performance
 
-PARAMS['n_jobs'] = 10  # number of jobs to run in parallel
+PARAMS['n_jobs'] = 10
 
 PARAMS['n_trial_instances'] = 1  # for training
 PARAMS['n_trial_instances_test'] = 100  # for test
@@ -174,12 +175,11 @@ PARAMS['M'] = PARAMS['B'] * PARAMS['L']  # total number of bins
 PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 
 # %% PATHS ##
-# this is what you need to set
-PARAMS['BASE_PATH'] = 'your_datafolder/'
-PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'
 
-# path to the datafiles from the current experiment
-PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}/experiment_{PARAMS['experiment_number']}/"
+# PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
+PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'
+PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
+
 if PARAMS['ai_vs_learning_speed']:
     # Variant of the experiment for running the AI vs learning speed analysis.
     # Different from the base experiment configuration in terms of the training stop procedure used (stop training once
@@ -201,5 +201,6 @@ PARAMS['FULL_PATH'] = f"{PARAMS['COND_PATH']}sigma{PARAMS['sigma']}/kappa{PARAMS
 PARAMS['FIG_PATH'] = f"{PARAMS['FULL_PATH']}figs/"
 check_path(PARAMS['FIG_PATH'])  # create the figure folder if it doesn't exist
 
+PARAMS['MATLAB_PATH'] = '/Users/emilia/OneDrive - Nexus365/MATLAB/rnn_retrocue_data/'
 PARAMS['RAW_DATA_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"
 PARAMS['RESULTS_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"

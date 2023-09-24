@@ -190,9 +190,11 @@ PARAMS['M'] = PARAMS['B'] * PARAMS['L']  # total number of bins
 PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 
 # %% PATHS ##
+# this is what you need to set
+PARAMS['BASE_PATH'] = 'your_datafolder/'
+PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'
 
-# PARAMS['BASE_PATH'] = os.path.abspath(os.getcwd())+'/'
-PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'
+# path to the datafiles from the current experiment
 PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
 
 if PARAMS['experiment_number'] == 4:
@@ -210,6 +212,5 @@ PARAMS['FULL_PATH'] = f"{PARAMS['COND_PATH']}sigma{PARAMS['sigma']}/kappa{PARAMS
 PARAMS['FIG_PATH'] = f"{PARAMS['FULL_PATH']}figs/"
 check_path(PARAMS['FIG_PATH'])  # create the figure folder if it doesn't exist
 
-PARAMS['MATLAB_PATH'] = '/Users/emilia/OneDrive - Nexus365/MATLAB/rnn_retrocue_data/'
 PARAMS['RAW_DATA_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"
 PARAMS['RESULTS_PATH'] = f"{PARAMS['FULL_PATH']}evaluation_data/"

@@ -17,7 +17,7 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.signal import argrelextrema
 
 import src.retrocue_model as retnet
-import src.custom_plot as plotter
+import src.plotting_funcs as plotter
 import src.stats as stats
 import src.generate_data_von_mises as dg
 import src.subspace_alignment_index as ai
@@ -100,7 +100,7 @@ def partial_train_and_eval(constants, model_number, plateau_ix):
     assert constants.PARAMS['experiment_number'] is 1, 'Analysis only implemented for Experiment 1'
     print('PARTIAL TRAINING ANALYSIS')
 
-    eval_path = f"{constants.PARAMS['FULL_PATH']}pca_data/valid_trials/partial_training/"
+    eval_path = f"{constants.PARAMS['RESULTS_PATH']}/valid_trials/partial_training/"
     check_path(eval_path)
     check_path(f"{eval_path}untrained/")  # create paths
     check_path(f"{eval_path}plateau/")  # create paths
@@ -145,7 +145,7 @@ def get_model_pca_data(constants, model_number):
     :return: all_data: dictionary containing the training stage name keys ('untrained', 'plateau', 'trained'), each
         containing the evaluation dataset binned into colour bins (i.e., the pca_data structure).
     """
-    data_path = f"{constants.PARAMS['FULL_PATH']}pca_data/valid_trials/"
+    data_path = f"{constants.PARAMS['RESULTS_PATH']}/valid_trials/"
     data_folders = ['partial_training/untrained/', 'partial_training/plateau/', '']
     conditions = ['untrained', 'plateau', 'trained']
     all_data = {}
@@ -295,10 +295,11 @@ def run_learning_dynamics_analysis(constants):
 
     :param module constants: A Python module containing constants and configuration data for the simulation.
     """
+    print('RUNNING THE LEARNING DYNAMICS ANALYSIS FOR THE CUED GEOMETRY')
     lc_plateau, all_theta, all_PVEs, all_AI = run_learning_stages_all_models(constants)
     # save plateau ixs
-    with open(f"{constants.PARAMS['RESULTS_PATH']}valid_trials/training_data/lc_plateau.pckl", 'wb') as f:
-        pickle.dump(lc_plateau, f)
+    # with open(f"{constants.PARAMS['RESULTS_PATH']}/training_data/lc_plateau.pckl", 'wb') as f:
+    #     pickle.dump(lc_plateau, f)
 
     # reformat the other arrays into dictionaries
     theta_dict, pve_dict, ai_dict = reformat_geometry_data(constants, all_theta, all_PVEs, all_AI)
@@ -356,12 +357,13 @@ def corr_retro_weights(constants):
 
 def run_retro_weight_analysis(constants):
     """
-    Run the retrocueing weights correlation analysis. For each model, correlate the weights vectors corresponding to the
-    retrocue1-hidden and retrocue2-hidden weights. Test if the correlation coefficients are significantly different from
-    0 at the group level. Plot the two retrocueing weights vectors for an example model.
+    Run the retrocueing weights correlation analysis (reported in Figure 4B). For each model, correlate the weights
+    vectors corresponding to the retrocue1-hidden and retrocue2-hidden weights. Test if the correlation coefficients are
+    significantly different from 0 at the group level. Plot the two retrocueing weights vectors for an example model.
 
     :param module constants: A Python module containing constants and configuration data for the simulation.
     """
+    print('RUNNING THE CONNECTIVITY ANALYSIS')
     # correlate the cue1 and cue2 weights for each model
     r, p = corr_retro_weights(constants)
     # test if the correlation coefficients are significantly different from zero at the group level
