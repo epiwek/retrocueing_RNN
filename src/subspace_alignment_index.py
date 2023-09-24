@@ -16,7 +16,7 @@ from sklearn.decomposition import PCA
 
 import src.stats as stats
 import src.preprocess_rep_geom_data as ppc
-import src.custom_plot as plotter
+import src.plotting_funcs as plotter
 
 
 # %% Compute alignment indices via PCA
@@ -527,7 +527,7 @@ def run_AI_analysis(constants, all_data, geometry_name, trial_type='valid'):
         "Invalid geometry_name, choose from: 'cued', 'uncued', 'cued_up_uncued_down', 'cued_down_uncued_up', and " \
         "'cued_uncued'"
 
-    print(f'AI analysis, {geometry_name} geometry')
+    print(f'RUNNING THE AI ANALYSIS, {geometry_name} GEOMETRY')
 
     if geometry_name == 'cued_uncued':
         # run the analysis for both trial types ('cued_up_uncued_down' and 'cued_down_uncued_up') and average results
@@ -598,6 +598,8 @@ def run_AI_analysis(constants, all_data, geometry_name, trial_type='valid'):
 
         # get statistics
         print_descriptive_stats(ai_averaged, comparison=['unrotated', 'rotated'])
+
+        print('Note the statistics for this analysis were ran in JASP')
         # note the statistics reported in the paper were ran in JASP, as the scipy.stats implementation of the Wilcoxon
         # test returns a W-statistic = 0 but a highly significant p-value
         # print_inferential_stats(constants, ai_averaged, 'unrot_rot')
@@ -620,7 +622,7 @@ def run_AI_analysis_experiment_2(constants):
     :param module constants: A Python module containing constants and configuration data for the simulation.
     :return:
     """
-    print('Experiment 2 - cued AI analysis')
+    print('EXPERIMENT 2 - CUED AI ANALYSIS')
     assert constants.PARAMS['experiment_number'] == 2, \
         'This function should only be used for Experiment 2 (retrocue timing)'
 

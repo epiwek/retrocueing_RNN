@@ -12,7 +12,7 @@ import pickle
 import torch
 import pandas as pd
 import numpy as np
-import src.learning_dynamics as ld
+import src.learning_dynamics_and_connectivity_analysis as ld
 
 
 def get_training_speed_metrics(constants):

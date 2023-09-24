@@ -418,9 +418,6 @@ def load_model(path, params, device):
         model = RNN(params, device)
         model.load_state_dict(torch.load(f"{path}model{str(params['model_number'])}_statedict"))
     else:
-        # for some reason cannot load models straight from file with:
-        # model = torch.load(path + 'model' + str(params['model_number']), map_location=torch.device('cpu'))
-        # so replaced it with:
         model = RNN(params, device)
         model.load_state_dict(torch.load(f"{path}model{str(params['model_number'])}_statedict"))
 

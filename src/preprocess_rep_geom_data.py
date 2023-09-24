@@ -355,8 +355,7 @@ def get_unrotated_rotated_data(constants, get_test_train_split=False):
         loads from file. Default is True.
     :return: all_data array (n_models, n_cv_folds)
     """
-    base_path = constants.PARAMS['FULL_PATH']
-    load_path = base_path + 'pca_data/valid_trials'
+    load_path = f"{constants.PARAMS['RESULTS_PATH']}valid_trials"
     n_bins = constants.PARAMS['B']
 
     # get the train/test indices
@@ -428,8 +427,7 @@ def get_all_binned_data(constants, trial_type='valid', probed_unprobed=False):
     binned across cued colours for model 0, we would want to access the following part of the all_data dictionary:
         all_data[0]['cued']
     """
-    base_path = constants.PARAMS['FULL_PATH']
-    load_path = base_path + 'pca_data/' + trial_type + '_trials/pca_data_'
+    load_path = f"{constants.PARAMS['RESULTS_PATH']}{trial_type}_trials/pca_data_"
 
     all_data = {}
     geometry_names = ['cued', 'uncued', 'cued_up_uncued_down', 'cued_down_uncued_up']

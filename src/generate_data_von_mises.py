@@ -10,7 +10,7 @@ import torch
 import itertools
 import seaborn as sns
 import matplotlib.pyplot as plt
-import src.custom_plot as cplot
+import src.plotting_funcs as cplot
 from scipy.stats import vonmises
 from src.helpers import check_path
 

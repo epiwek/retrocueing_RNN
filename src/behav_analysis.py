@@ -17,7 +17,7 @@ import pandas as pd
 from scipy.stats import vonmises
 import src.retrocue_model as retnet
 from src.stats import get_sem
-from src.custom_plot import plot_all_error_data, plot_mixture_model_params_validity
+from src.plotting_funcs import plot_all_error_data, plot_mixture_model_params_validity
 import src.helpers as helpers
 
 
@@ -303,7 +303,7 @@ def save_error_data_to_file(results, test_path):
     # % save data
     for key in results.keys():
         retnet.save_data(results[key], f"{test_path}{key}")
-
+    retnet.save_data(results, f"{test_path}all_error_results_dict")
     return
 
 
@@ -341,7 +341,7 @@ def load_mixture_model_params(constants):
         data = pd.read_csv(file_path)
 
         # reshape data into a pandas dataframe - for plotting in seaborn
-        condition = np.tile(data['condition'].to_numpy(), 2)  # cue validity
+        condition = np.tile(data['cue_validity'].to_numpy(), 2)  # cue validity
         t_type = [[trial_type[t]] * n_models * 2 for t in range(len(trial_type))]
         t_type = np.reshape(t_type, -1)
         # create '{parameter}_valid' and '{parameter}_invalid' labels'
@@ -422,6 +422,7 @@ def run_behav_analysis(constants, expt_test_conditions, expt_test_paths):
 
         # save data to file
         save_error_data_to_file(all_results[condition], path)
+
 
     # plot error distributions
     plot_all_error_data(constants, expt_test_conditions, all_results)

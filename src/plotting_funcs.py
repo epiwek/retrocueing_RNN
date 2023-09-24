@@ -908,7 +908,6 @@ def plot_AI(constants, ai_table, geometry_name):
         jitter = np.array([0.25 / 2, 0.25 / 2, 0.25 * (3/2)])
         jitter_sign = np.array([-1, 1, 1])
 
-
     ms = 16
     n_dims = ai_table.shape[0]  # n of dimensions for which AI was calculated
     n_conditions = ai_table.shape[1]  # n timepoints
@@ -1054,6 +1053,7 @@ def plot_example_retro_weights(cue1_weights, cue2_weights, r):
     y = cue2_weights.max() * .75
     plt.text(x, y, 'r = %.3f' % r)
     plt.tight_layout()
+    sns.despine()
 
 
 def plot_learning_dynamics_angles(constants, theta_dict):

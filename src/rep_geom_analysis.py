@@ -4,7 +4,7 @@ from src.subspace import Geometry
 import pickle
 import importlib
 import matplotlib.pyplot as plt
-import src.custom_plot as plotter
+import src.plotting_funcs as plotter
 import src.plane_angles_analysis as angles
 import src.vec_operations as vops
 import src.preprocess_rep_geom_data as ppc
@@ -27,16 +27,17 @@ def model_geometry_looper(constants, all_data, geometry_name, delay_name=None):
     :param module constants: A Python module containing constants and configuration data for the simulation.
     :param dict all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
         geometries. See the output of the 'get_all_binned_data' function for more details.
-    :param str geometry_name: Desired geometry. Choose from: 'cued', 'uncued', 'cued_up_uncued_down' and
-        'cued_down_uncued_up'
+    :param str geometry_name: Desired geometry. Choose from: 'cued', 'uncued', 'cued_up_uncued_down',
+        'cued_down_uncued_up', 'rotated', and 'unrotated'
     :param str delay_name: Desired delay interval. Choose from: 'delay1', 'delay2' and 'delay3' (only for Experiment 4).
     :return: all_subspaces, all_psi, all_theta, all_PVEs
 
     .. note:: This function mirrors the model_looper function from subspace_alignment_index. Both could probably be
     rewritten as decorators.
     """
-    assert geometry_name in ['cued', 'uncued', 'cued_up_uncued_down', 'cued_down_uncued_up'], \
-        "Incorrect geometry name, choose from : 'cued', 'uncued', 'cued_up_uncued_down' and 'cued_down_uncued_up'"
+    assert geometry_name in ['cued', 'uncued', 'cued_up_uncued_down', 'cued_down_uncued_up', 'rotated', 'unrotated'], \
+        "Incorrect geometry name, choose from : 'cued', 'uncued', 'cued_up_uncued_down', 'cued_down_uncued_up', '" \
+        "rotated', and 'unrotated'"
 
     all_subspaces, all_coords = {}, {}
     all_psi, all_theta, all_PVEs = [], [], []
@@ -168,6 +169,13 @@ def model_CDI_looper(constants, cued_up_coords, cued_down_coords):
     CDI_for_stats = pd.concat(CDI_for_stats, ignore_index=True)
 
     return CDI_for_plots, CDI_for_stats
+
+
+def save_geometry(constants, file_name, file, geometry_name, trial_type='valid'):
+    """ Save the geometry measure to file """
+    with open(f"{constants.PARAMS['RESULTS_PATH']}{trial_type}_trials/{geometry_name}{file_name}.pckl", 'wb') as f:
+        pickle.dump(file, f)
+    return
 
 
 #%% CDI analysis functions
@@ -327,12 +335,63 @@ def save_CDI_to_file(constants, CDI_for_plots, CDI_for_stats):
     :param pd.DataFrame CDI_for_plots: CDI data for plotting
     :param pd.DataFrame CDI_for_stats: CDI data for statistical analysis
     """
-    save_path = constants.PARAMS['FULL_PATH'] + 'pca_data/'
+    save_path = constants.PARAMS['RESULTS_PATH']
 
     CDI_for_stats.to_csv(save_path + 'CDI.csv')
     pickle.dump(CDI_for_plots, open(save_path + 'CDI_for_plotting.pckl', 'wb'))
 
     return
+
+
+def export_CDI_and_mixture_model_params_validity(constants):
+    """
+    Load the CDI and mixture model parameter data, calculate the CDI benefit and valid-invalid difference in mixture
+    model parameters and save as a csv table, for analysis in JASP.
+
+    :param module constants: A Python module containing constants and configuration data for the simulation.
+    """
+    assert constants.PARAMS['experiment_number'] is 4, 'This function should only be used for Experiment 4.'
+    # load the CDI data structure from file
+    try:
+        CDI = pd.read_csv(f"{constants.PARAMS['RESULTS_PATH']}CDI.csv")
+    except FileNotFoundError:
+        raise FileNotFoundError('Make sure the CDI data is saved in the correct location.')
+
+    # calculate difference in the probed and unprobed item CDI on valid trials
+    CDI_probed_diff_valid = CDI['postprobe_probed_valid'] - CDI['postprobe_unprobed_valid']
+    # and the analogous difference on invalid trials
+    CDI_probed_diff_invalid = CDI['postprobe_probed_invalid'] - CDI['postprobe_unprobed_invalid']
+
+    # probed item normalised CDI benefit
+    probed_benefit_diff_norm = (CDI_probed_diff_valid - CDI_probed_diff_invalid) / CDI_probed_diff_valid
+
+    # mixture model params
+    params = ['K', 'pT', 'pNT', 'pU']
+    trial_type = ['valid', 'invalid']
+
+    all_data = np.zeros((c.PARAMS['n_models'], 1 + len(params)))
+    all_data_labels = [p + '_diff' for p in params]
+    all_data_labels.insert(0, 'norm CDI benefit')
+    all_data[:, 0] = probed_benefit_diff_norm
+
+    for param_ix, param_name in enumerate(params):
+        # load data
+        data = pd.read_csv(f"{c.PARAMS['MATLAB_PATH']}{param_name}_table.csv")
+
+        label1 = param_name + '_' + trial_type[0]  # valid
+        label2 = param_name + '_' + trial_type[1]  # invalid
+
+        # extract the validity = 75% data
+        prob_ix = np.where(data['cue_validity'] == 0.75)[0]
+        param_valid = data[label1][prob_ix]
+        param_invalid = data[label2][prob_ix]
+
+        param_diff = param_valid - param_invalid
+        all_data[:, param_ix + 1] = param_diff
+
+    # save data to csv
+    df = pd.DataFrame(all_data, columns=all_data_labels)
+    df.to_csv(constants.PARAMS['RESULTS_PATH'] + '/CDI_norm_benefit_and_mixture_model_params.csv')
 
 #%% get the rotated and unrated labels
 
@@ -379,7 +438,7 @@ def run_CDI_analysis(constants):
 
     :param module constants: A Python module containing constants and configuration data for the simulation.
     """
-
+    print('RUNNING THE COLOUR DISCRIMINABILITY INDEX (CDI) ANALYSIS')
     # get the single-trial location arrays
     cdi_data = ppc.get_CDI_data(constants)
 
@@ -395,7 +454,7 @@ def run_CDI_analysis(constants):
     # if constants.PARAMS['experiment_number'] == 1:
         # run contrasts - done in JASP
         # test_CDI_contrasts(constants, CDI_for_stats)
-
+    print('Note the statistical tests for this analysis were run in JASP.')
     # plot
     plotter.plot_CDI(constants, CDI_for_plots, log_transform=True)
 
@@ -404,7 +463,7 @@ def run_CDI_analysis(constants):
         plt.savefig(constants.PARAMS['FIG_PATH'] + 'CDI.svg')
 
     # save data to file
-    # save_CDI_to_file(constants, CDI_for_plots, CDI_for_stats)
+    save_CDI_to_file(constants, CDI_for_plots, CDI_for_stats)
 
     return
 
@@ -421,8 +480,15 @@ def run_cued_geom_analysis(constants, all_data):
     :param dict all_data: Data dictionary containing averaged and binned 'pca_data' arrays for all models and possible
         geometries. See the output of the 'get_all_binned_data' function for more details.
     """
+    "RUNNING THE CUED GEOMETRY ANALYSIS"
     # get the Cued item geometry for all trained networks and delays
     cued_subspaces, psi, theta, PVEs = delay_looper_geometry(constants, all_data, 'cued')
+    # save the data to file
+    f_names = ['psi', 'theta', 'PVEs']
+    files = [psi, theta, PVEs]
+
+    for file, f_name in zip(files, f_names):
+        save_geometry(constants, f_name, file, 'cued', trial_type='valid')
 
     if constants.PARAMS['experiment_number'] == 1:
         # plot 3D geometry for example models
@@ -454,14 +520,13 @@ def run_cued_geometry_experiment_2(constants):
     """
     assert constants.PARAMS['experiment_number'] == 2, \
         'This function should only be used for Experiment 2 (retrocue timing)'
-
+    print('RUNNING THE CUED GEOMETRY ANALYSIS - EXPERIMENT 2')
     # calculate the geometry for all variants of the experiment
     delay2_max_length, all_theta, all_PVEs = experiment_2_looper(constants)
 
     # plot the angle comparison
-    plotter.plot_geometry_estimates_experiment_2(constants, delay2_max_length, all_theta)
+    plotter.plot_geometry_estimates_experiment_2(constants, delay2_max_length, all_theta, are_angles=True)
     # save plot
-    print('Change the path below to that shared by all variants of Expt 2')
     if constants.PLOT_PARAMS['save_plots']:
         plt.savefig(f"{constants.PARAMS['EXPT2_PATH']}'compare_cued_angles.svg")
         plt.savefig(f"{constants.PARAMS['EXPT2_PATH']}'compare_cued_angles.png")
@@ -490,6 +555,8 @@ def run_unrotated_rotated_geometry(constants):
     """
     if constants.PARAMS['experiment_number'] not in [1, 3]:
         raise NotImplementedError('Unrotated / Rotated plane analysis only implemented for Experiments 1 and 3')
+
+    "RUNNING THE UNROTATED/ROTATED PLANE ANGLES ANALYSIS"
 
     # get the data
     preprocessed_data = ppc.get_unrotated_rotated_data(constants)
@@ -521,8 +588,14 @@ def run_unrotated_rotated_geometry(constants):
         all_psi[plane_label] = np.stack(all_psi[plane_label]).T
         all_theta[plane_label] = np.stack(all_theta[plane_label]).T
 
+    # save the data to file
+    f_names = ['psi', 'theta']
+    files = [all_psi, all_theta]
+    for file, f_name in zip(files, f_names):
+        save_geometry(constants, f_name, file, 'unrot_rot', trial_type='valid')
+
     # analyse the angles: rectify and average across cross-validation folds, run inferential stat tests and plot
-    angles.run_rot_unrot_angles_analysis(constants, all_psi, all_theta, plane_label_keys)
+    angles.run_unrot_rot_angles_analysis(constants, all_psi, all_theta, plane_label_keys)
     return
 
 
@@ -543,9 +616,15 @@ def run_uncued_geom_analysis(constants, all_data):
     """
     if constants.PARAMS['experiment_number'] not in [1, 3]:
         raise NotImplementedError('Cued/Uncued geometry analysis only implemented for Experiments 1 and 3.')
-
+    print('RUNNING THE UNCUED GEOMETRY ANALYSIS')
     # get the Uncued item geometry for all trained networks and delays
     subspaces, psi, theta, PVEs = delay_looper_geometry(constants, all_data, 'uncued')
+
+    # save the data to file
+    f_names = ['psi', 'theta', 'PVEs']
+    files = [psi, theta, PVEs]
+    for file, f_name in zip(files, f_names):
+        save_geometry(constants, f_name, file, 'cued', trial_type='valid')
 
     if constants.PARAMS['experiment_number'] == 1:
         # plot 3D geometry for example models
@@ -580,7 +659,7 @@ def run_cued_uncued_geom_analysis(constants, all_data):
 
     if constants.PARAMS['experiment_number'] not in [1, 3]:
         raise NotImplementedError('Cued/Uncued geometry analysis only implemented for Experiments 1 and 3.')
-
+    print('RUNNING THE CUED/UNCUED GEOMETRY ANALYSIS')
     subspace_results = []
     theta_results = []
     for trial_type in ['cued_up_uncued_down', 'cued_down_uncued_up']:
@@ -598,6 +677,9 @@ def run_cued_uncued_geom_analysis(constants, all_data):
     # stack the cued-up/uncued-down and cued-down/uncued-up angle estimates into a single array
     theta_post_cue = np.stack((theta_results[0][:, post_cue_ix], theta_results[1][:, post_cue_ix])).T
 
+    # save to file
+    save_geometry(constants, 'theta_post_cue', theta_post_cue, 'cued_uncued', trial_type='valid')
+    # run the angles analysis
     angles.run_angles_analysis(constants, theta_post_cue, None, 'cued-uncued')
 
     return

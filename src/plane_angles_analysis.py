@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import pycircstat
 
 import src.helpers as helpers
-import src.custom_plot as cplot
+import src.plotting_funcs as cplot
 
 # %% circular stats for theta
 
@@ -355,9 +355,9 @@ def run_angles_analysis(constants, theta_degrees, psi_degrees, geometry_name):
         get_inf_stats_theta_cued_vs_uncued(angles_radians_rect_mean)
 
 
-def run_rot_unrot_angles_analysis(constants, psi_degrees, theta_degrees, plane_labels):
+def run_unrot_rot_angles_analysis(constants, psi_degrees, theta_degrees, plane_labels):
     """
-    Analyse the plane angles for the 'rotated' and 'unrotated' Cued plane.
+    Analyse the plane angles for the 'unrotated' and 'rotated' Cued planes.
 
     For each angle (theta, psi), rectifies the values to be within [0, pi] and takes the average across cross-validation
     folds, then plots the rotated and unrotated angle averages.
