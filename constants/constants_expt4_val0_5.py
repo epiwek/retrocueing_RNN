@@ -194,7 +194,7 @@ PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 # %% PATHS ##
 # this is what you need to set
 PARAMS['BASE_PATH'] = 'your_datafolder/'
-PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'
+PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'  # path to the matlab files (mixture model parameters)
 
 # path to the datafiles from the current experiment
 PARAMS['BASE_PATH'] = '/Volumes/EP_Passport/emilia/'

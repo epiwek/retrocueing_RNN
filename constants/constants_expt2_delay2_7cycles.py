@@ -142,7 +142,7 @@ PARAMS['init_scale'] = 1
 # 'init_scale' - factor by which the weight init should be scaled - needed in 
 # order to be able to train longer sequences without hidden noise
 
-PARAMS['criterion_type'] = 'loss_der'  # 'abs_loss' # or 'loss_der'
+PARAMS['criterion_type'] = 'abs_loss'  # 'abs_loss' # or 'loss_der'
 PARAMS['MSE_criterion'] = 0.0005
 PARAMS['conv_criterion'] = {}
 PARAMS['conv_criterion']['window'] = 15
@@ -177,7 +177,7 @@ PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 # %% PATHS ##
 # this is what you need to set
 PARAMS['BASE_PATH'] = 'your_datafolder/'
-PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'
+PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'  # path to the matlab files (mixture model parameters)
 
 # path to the datafiles from the current experiment
 PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}data_vonMises/experiment_{PARAMS['experiment_number']}/"
