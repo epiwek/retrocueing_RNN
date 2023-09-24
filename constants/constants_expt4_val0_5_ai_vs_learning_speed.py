@@ -3,14 +3,16 @@
 """
 Created on Fri Jan 29 18:04:08 2021
 
+This is the configuration file for Experiment 4, cue validity 0.5, AI vs learning speed analysis. It differs from the
+main Experiment 4, cue validity 0.5 configuration file in just one aspect - it is set to train more (N=100) models.
+
+To run the experiment, pass the path to the folder which is to contain the data from all Experiments on lines 196-197.
 @author: emilia
 """
-import os
 import numpy as np
 import itertools
 import torch
 import seaborn as sns
-from scipy.stats import norm
 from src.generate_data_von_mises import make_stimuli_vonMises
 from src.helpers import check_path
 

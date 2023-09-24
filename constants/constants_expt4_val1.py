@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Jan 29 18:04:08 2021
+This is the configuration file for Experiment 4, cue validity 1.0.
 
+To run the experiment, pass the path to the folder which is to contain the data from all Experiments on lines 197-198.
 @author: emilia
 """
-import os
 import numpy as np
 import itertools
 import torch

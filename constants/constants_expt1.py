@@ -3,8 +3,8 @@
 """
 Created on Fri Jan 29 18:04:08 2021
 
-This is the configuration file for Experiment 1.
-
+This is the configuration file for Experiment 1. To run the experiment, pass the path to the folder which is to contain
+the data from all Experiments on lines 178 and 179.
 
 @author: emilia
 """
@@ -176,7 +176,7 @@ PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 # %% PATHS ##
 # this is what you need to set
 PARAMS['BASE_PATH'] = 'your_datafolder/'
-PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'
+PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'  # path to the matlab files (mixture model parameters)
 
 # path to the datafiles from the current experiment
 PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}/experiment_{PARAMS['experiment_number']}/"

@@ -3,14 +3,18 @@
 """
 Created on Fri Jan 29 18:04:08 2021
 
+This is the configuration file for Experiment 1, the AI vs learning speed analysis. It different from the main
+Experiment 1 configuration file in 2 aspects: it is set to train more (N=100) models, and it uses a different
+convergence criterion to do so.
+
+To run the experiment, pass the path to the folder which is to contain the data from all Experiments on lines 184-185.
+
 @author: emilia
 """
-import os
 import numpy as np
 import itertools
 import torch
 import seaborn as sns
-from scipy.stats import norm
 from src.generate_data_von_mises import make_stimuli_vonMises
 from src.helpers import check_path
 
