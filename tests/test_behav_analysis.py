@@ -3,6 +3,10 @@ import warnings
 import torch
 import numpy as np
 import src.behav_analysis as ba
+import constants.constants_expt1 as constants_expt_1
+import types
+
+import os
 
 
 class TestWrapAngle:
@@ -72,3 +76,20 @@ class TestGetAngularErrors:
         result = ba.get_angular_errors(choices, probed_colours)
         result = result.squeeze()  # squeeze so that tensor is 1D, like probed_colours
         assert torch.all(result == -probed_colours), 'Constant output case does not output the correct error values.'
+
+
+class TestLoadMixtureModelParams:
+    def test_cue_validity_1(self):
+        with pytest.raises(NotImplementedError, 'Mixture models only fitted for data from Experiment 4, cue validity < 1.'):
+            ba.load_mixture_model_params(constants_expt_1)
+
+    def test_files_exist(self):
+        # not the most elegant solution - create a bogus constants module with the MATLAB file path set to the
+        # current directory
+
+        constants_test = types.ModuleType("temporary_module")
+        constants_test.PARAMS = {'cue_validity': 0.75, 'MATLAB_PATH': os.getcwd(), 'n_models': 1}
+
+        with pytest.raises(FileNotFoundError):
+            ba.load_mixture_model_params(constants_test)
+
