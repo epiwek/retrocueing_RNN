@@ -139,16 +139,16 @@ PARAMS['n_models'] = 30
 PARAMS['n_epochs'] = 1000
 PARAMS['learning_rate'] = 10 ** (-4)
 PARAMS['init_scale'] = 1
-# 'init_scale' - factor by which the weight init should be scaled - needed in 
+# 'init_scale' - factor by which the weight init should be scaled - needed in
 # order to be able to train longer sequences without hidden noise
-
 PARAMS['criterion_type'] = 'abs_loss'  # 'abs_loss' # or 'loss_der'
 PARAMS['MSE_criterion'] = 0.0005
-PARAMS['conv_criterion'] = {}
-PARAMS['conv_criterion']['window'] = 15
+PARAMS['conv_criterion'] = {}  # parameters for the loss_der convergence criterion
+PARAMS['conv_criterion']['smooth_sd'] = 3  # standard deviation value for the Gaussian smoother
+PARAMS['conv_criterion']['window'] = 15  # smoothing window
 PARAMS['conv_criterion']['thr_slope'] = -2e-05  # threshold for the dLoss/dt value
-PARAMS['conv_criterion']['thr_loss'] = 0.0036  # threshold for the loss value
-
+PARAMS['conv_criterion']['thr_loss'] = 0.0036
+# threshold for the loss value - set to the level that corresponds to monkey performance
 PARAMS['n_jobs'] = 1
 
 PARAMS['n_trial_instances'] = 1

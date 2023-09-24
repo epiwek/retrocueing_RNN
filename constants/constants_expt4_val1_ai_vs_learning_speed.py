@@ -164,10 +164,11 @@ PARAMS['MSE_criterion'] = 0.0005  # loss threshold if the criterion is just some
 
 # parameters for the loss_der convergence criterion - consult the 'apply_conv_criterion' function in retrocue_model.py
 PARAMS['conv_criterion'] = {}
-PARAMS['conv_criterion']['smooth_sd'] = 3
-PARAMS['conv_criterion']['window'] = 15  # number of epochs used in the convergence criterion
+PARAMS['conv_criterion']['smooth_sd'] = 3  # standard deviation value for the Gaussian smoother
+PARAMS['conv_criterion']['window'] = 15  # smoothing window
 PARAMS['conv_criterion']['thr_slope'] = -2e-05  # threshold for the dLoss/dt value
-PARAMS['conv_criterion']['thr_loss'] = 0.0036  # threshold for the loss value
+PARAMS['conv_criterion']['thr_loss'] = 0.0036
+# threshold for the loss value - set to the level that corresponds to monkey performance
 
 PARAMS['n_jobs'] = 10
 
