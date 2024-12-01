@@ -23,7 +23,7 @@ import src.generate_data_von_mises as dg
 import src.subspace_alignment_index as ai
 from src.subspace import Geometry
 from src.helpers import check_path
-
+import pdb
 # %% learning dynamics analysis
 
 
@@ -105,7 +105,8 @@ def partial_train_and_eval(constants, model_number, plateau_ix):
     check_path(f"{eval_path}untrained/")  # create paths
     check_path(f"{eval_path}plateau/")  # create paths
 
-    # get the test dataset
+    # get the test dataset - note this function updates constants by increasing the stim_set_size by x100
+    # this is so that the test results are more robust against model noise
     all_test_data = dg.generate_test_dataset(constants.PARAMS)
     test_data = all_test_data['trained']
     device = torch.device('cpu')
@@ -126,9 +127,14 @@ def partial_train_and_eval(constants, model_number, plateau_ix):
     # train model
     print('Training up to the plateau')
     constants.PARAMS['n_epochs'] = plateau_ix
+    # scale down the stim_set_size
+    constants.PARAMS['stim_set_size'] = constants.PARAMS['n_trial_types'] * constants.PARAMS['n_trial_instances']
     model, _ = retnet.train_model(constants.PARAMS, constants.TRAINING_DATA, device)
+
     # evaluate
     print('Evaluating partially trained')
+    # scale up the stim_set_size
+    constants.PARAMS['stim_set_size'] = constants.PARAMS['n_trial_types'] * constants.PARAMS['n_trial_instances_test']
     _, _, _, = \
         retnet.eval_model(model, test_data, constants.PARAMS, eval_path + 'plateau/')
 
@@ -145,7 +151,7 @@ def get_model_pca_data(constants, model_number):
     :return: all_data: dictionary containing the training stage name keys ('untrained', 'plateau', 'trained'), each
         containing the evaluation dataset binned into colour bins (i.e., the pca_data structure).
     """
-    data_path = f"{constants.PARAMS['RESULTS_PATH']}/valid_trials/"
+    data_path = f"{constants.PARAMS['RESULTS_PATH']}valid_trials/"
     data_folders = ['partial_training/untrained/', 'partial_training/plateau/', '']
     conditions = ['untrained', 'plateau', 'trained']
     all_data = {}
@@ -209,7 +215,7 @@ def run_learning_plateau_pipeline_single_model(constants, model_number):
         plt.savefig(constants.PARAMS['FIG_PATH'] + 'example_loss_plot.png')
         plt.savefig(constants.PARAMS['FIG_PATH'] + 'example_loss_plot.svg')
     # partial train model - uncomment the line below if you want to partial train the model again
-    # partial_train_and_eval(constants, model_number, plateau_ix)
+    partial_train_and_eval(constants, model_number, plateau_ix)
 
     # get all Cued pca data
     all_data = get_model_pca_data(constants, model_number)

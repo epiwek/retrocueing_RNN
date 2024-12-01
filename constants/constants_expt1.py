@@ -175,8 +175,9 @@ PLOT_PARAMS = {'4_colours': sns.color_palette("husl", 4), 'save_plots': False}
 
 # %% PATHS ##
 # this is what you need to set
-PARAMS['BASE_PATH'] = 'your_datafolder/'
+PARAMS['BASE_PATH'] = 'your_datafolder'
 PARAMS['MATLAB_PATH'] = 'your_matlab_files_path/'  # path to the matlab files (mixture model parameters)
+check_path(PARAMS['MATLAB_PATH'])
 
 # path to the datafiles from the current experiment
 PARAMS['COND_PATH'] = f"{PARAMS['BASE_PATH']}/experiment_{PARAMS['experiment_number']}/"
